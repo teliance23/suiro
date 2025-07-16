@@ -1,1 +1,1380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile | Suirodoku.com</title>
+    
+    <!-- FAVICON -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDHP3A6BZXAx72fY0_BFJQe9y1F2Za_Xo8",
+            authDomain: "suirodoku-web.firebaseapp.com",
+            projectId: "suirodoku-web",
+            storageBucket: "suirodoku-web.firebasestorage.app",
+            messagingSenderId: "936879624195",
+            appId: "1:936879624195:web:e3d2682df7c9b213d87e36",
+            measurementId: "G-RPJXTCGLZN"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Make Firebase functions globally available
+        window.firebaseAuth = {
+            auth,
+            db,
+            onAuthStateChanged,
+            signOut,
+            doc,
+            getDoc
+        };
+
+        // ============= FONCTIONS GLOBALES DE PROFIL =============
+        
+        // Fonction pour obtenir le nom d'affichage selon les préférences
+        window.getDisplayName = function(userData) {
+            if (userData.profile?.displayPreference === 'gamertag' && userData.profile?.gamertag) {
+                return userData.profile.gamertag;
+            }
+            return userData.displayName || 'Anonymous';
+        };
+
+        // Fonction pour obtenir le drapeau selon la nationalité
+        window.getFlagEmoji = function(countryCode) {
+            const flags = {
+                'FR': '🇫🇷', 'US': '🇺🇸', 'GB': '🇬🇧', 'DE': '🇩🇪', 'ES': '🇪🇸',
+                'IT': '🇮🇹', 'JP': '🇯🇵', 'CN': '🇨🇳', 'BR': '🇧🇷', 'CA': '🇨🇦',
+                'AU': '🇦🇺', 'IN': '🇮🇳', 'RU': '🇷🇺', 'MX': '🇲🇽', 'KR': '🇰🇷',
+                'NL': '🇳🇱', 'SE': '🇸🇪', 'NO': '🇳🇴', 'DK': '🇩🇰', 'FI': '🇫🇮',
+                'CH': '🇨🇭', 'AT': '🇦🇹', 'BE': '🇧🇪', 'PL': '🇵🇱', 'PT': '🇵🇹'
+            };
+            return flags[countryCode] || '🌍';
+        };
+
+        // Fonction pour vérifier si le profil est complet
+        window.isProfileComplete = function(userData) {
+            return userData.profile?.isProfileComplete === true;
+        };
+
+        // Fonction pour récupérer les données utilisateur complètes
+        window.getUserData = async function(user) {
+            try {
+                const userRef = doc(db, 'users', user.uid);
+                const userDoc = await getDoc(userRef);
+                
+                if (userDoc.exists()) {
+                    return { ...user, ...userDoc.data() };
+                }
+                return user;
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+                return user;
+            }
+        };
+
+        console.log('🔥 Firebase initialized on profile page');
+    </script>
+    
+    <style>
+        /* ============= RESET ET BASE ============= */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            caret-color: transparent;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+            background-color: #f2f2f7;
+            color: #000;
+            line-height: 1;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ============= HEADER DYNAMIQUE - STYLES ============= */
+        .user-menu {
+            position: relative;
+            display: inline-block;
+        }
+
+        .user-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #4a5568;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .user-name:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #2d3748;
+        }
+
+        .user-name::after {
+            content: '▼';
+            font-size: 10px;
+            transition: transform 0.3s ease;
+        }
+
+        .user-menu:hover .user-name::after {
+            transform: rotate(180deg);
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border: 1px solid rgba(229, 229, 234, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .user-menu:hover .dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-menu a {
+            display: block;
+            padding: 14px 20px;
+            color: #1c1c1e;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border-bottom: 1px solid rgba(229, 229, 234, 0.3);
+        }
+
+        .dropdown-menu a:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-menu a:hover {
+            background: rgba(0, 122, 255, 0.05);
+            color: #007aff;
+        }
+
+        .dropdown-menu a:first-child {
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+        }
+
+        .dropdown-menu a:last-child {
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+        }
+
+        .user-flag {
+            font-size: 16px;
+            margin-right: 4px;
+        }
+
+        /* ============= HEADER (identique au code original) ============= */
+        .header {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 16px 24px 20px 24px;
+            background-color: #fff;
+            position: relative;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            color: #4a5568;
+            letter-spacing: -0.8px;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-314px);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+
+        .logo:hover {
+            color: #2d3748;
+            background-color: rgba(74, 85, 104, 0.05);
+            transform: translateX(-314px) scale(1.02);
+        }
+
+        .nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: absolute;
+            left: 50%;
+            transform: translateX(40px);
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: 2px solid #e2e8f0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #4a5568;
+            cursor: pointer;
+            padding: 10px 20px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .nav-btn:hover {
+            background-color: #f7fafc;
+            border-color: #cbd5e0;
+            color: #2d3748;
+        }
+
+        .auth-buttons {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .auth-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .profile-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: 2px solid transparent;
+        }
+
+        .profile-btn:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .signup-btn:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        /* ============= MOBILE HAMBURGER ============= */
+        .mobile-hamburger {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 48px;
+            height: 48px;
+            background: white;
+            border: 1px solid #e5e5ea;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            gap: 4px;
+        }
+
+        .mobile-hamburger:hover {
+            background-color: #f8f9fa;
+            transform: scale(1.05);
+        }
+
+        .hamburger-line {
+            width: 20px;
+            height: 2px;
+            background-color: #4a5568;
+            border-radius: 1px;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-hamburger.active .hamburger-line:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+
+        .mobile-hamburger.active .hamburger-line:nth-child(2) {
+            opacity: 0;
+        }
+
+        .mobile-hamburger.active .hamburger-line:nth-child(3) {
+            transform: rotate(-45deg) translate(7px, -6px);
+        }
+
+        .mobile-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 2000;
+            backdrop-filter: blur(5px);
+        }
+
+        .mobile-overlay.show {
+            display: block;
+        }
+
+        .mobile-menu {
+            position: fixed;
+            top: 0;
+            right: -300px;
+            width: 300px;
+            height: 100%;
+            background: white;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 2001;
+            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+        }
+
+        .mobile-menu.show {
+            right: 0;
+        }
+
+        .mobile-menu-header {
+            padding: 0 20px 20px 20px;
+            border-bottom: 1px solid #e5e5ea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mobile-logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #4a5568;
+            letter-spacing: -0.6px;
+        }
+
+        .mobile-close {
+            width: 32px;
+            height: 32px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: background-color 0.2s ease;
+        }
+
+        .mobile-close:hover {
+            background-color: #f5f5f5;
+        }
+
+        .mobile-menu-content {
+            flex: 1;
+            padding: 20px 0;
+            overflow-y: auto;
+        }
+
+        .mobile-nav-section {
+            margin-bottom: 32px;
+        }
+
+        .mobile-section-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #8e8e93;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0 20px;
+            margin-bottom: 12px;
+        }
+
+        .mobile-nav-item {
+            display: block;
+            padding: 16px 20px;
+            color: #1c1c1e;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 500;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .mobile-nav-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .mobile-nav-item.logout {
+            color: #ff3b30;
+            font-weight: 600;
+        }
+
+        .mobile-nav-item.logout:hover {
+            background-color: #fff2f2;
+        }
+
+        /* ============= PROFILE CONTAINER ============= */
+        .profile-container {
+            min-height: calc(100vh - 140px);
+            padding: 40px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .profile-header {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(229, 229, 234, 0.3);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 32px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        .profile-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin: 0 auto 24px auto;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            color: white;
+            font-weight: 700;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+        }
+
+        .profile-name {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1c1c1e;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #1c1c1e 0%, #4a5568 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .profile-email {
+            font-size: 16px;
+            color: #8e8e93;
+            margin-bottom: 24px;
+        }
+
+        .profile-level {
+            display: inline-block;
+            background: linear-gradient(135deg, #ffd700, #ff8c00);
+            color: #1c1c1e;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .logout-btn {
+            background: linear-gradient(135deg, #ff3b30, #d70015);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+        }
+
+        .logout-btn:hover {
+            background: linear-gradient(135deg, #d70015, #b50012);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(215, 0, 21, 0.4);
+        }
+
+        .logout-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* ============= STATS GRID ============= */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .stats-card {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(229, 229, 234, 0.3);
+            border-radius: 20px;
+            padding: 32px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .stats-card-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1c1c1e;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .stats-card-icon {
+            font-size: 24px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f2f2f7;
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #8e8e93;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1c1c1e;
+        }
+
+        .stat-value.highlight {
+            color: #007aff;
+        }
+
+        .stat-value.success {
+            color: #28a745;
+        }
+
+        .stat-value.warning {
+            color: #ffc107;
+        }
+
+        /* ============= BEST SCORES ============= */
+        .best-scores-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .score-item {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .score-item:hover {
+            transform: translateY(-2px);
+            border-color: #007aff;
+            box-shadow: 0 8px 25px rgba(0, 122, 255, 0.15);
+        }
+
+        .score-difficulty {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .score-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1c1c1e;
+        }
+
+        .score-label {
+            font-size: 12px;
+            color: #8e8e93;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        /* ============= LOADING STATE ============= */
+        .loading-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e5ea;
+            border-top: 4px solid #007aff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #8e8e93;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        /* ============= FOOTER (identique au code original) ============= */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: #4a5568;
+            color: white;
+            transform: translateY(calc(100% - 8px));
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 100;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .footer:hover {
+            transform: translateY(0);
+        }
+
+        .footer-tab {
+            height: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .footer-tab::after {
+            content: '⌃';
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #4a5568;
+            font-size: 12px;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+
+        .footer:hover .footer-tab::after {
+            opacity: 0;
+        }
+
+        .footer-content {
+            padding: 20px 24px;
+        }
+
+        .footer-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .footer-legal {
+            display: flex;
+            gap: 20px;
+        }
+
+        .footer-legal a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: color 0.3s ease;
+            cursor: pointer;
+        }
+
+        .footer-legal a:hover {
+            color: #ffffff;
+        }
+
+        .main-content {
+            min-height: calc(100vh - 20px);
+            padding-bottom: 20px;
+        }
+
+        /* ============= RESPONSIVE ============= */
+        @media (max-width: 768px) {
+            .header {
+                display: none;
+            }
+
+            .mobile-hamburger {
+                display: flex;
+            }
+
+            .profile-container {
+                padding: 80px 16px 20px 16px;
+            }
+
+            .profile-header {
+                padding: 24px 20px;
+                margin-bottom: 20px;
+            }
+
+            .profile-avatar {
+                width: 80px;
+                height: 80px;
+                font-size: 32px;
+                margin-bottom: 16px;
+            }
+
+            .profile-name {
+                font-size: 24px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .stats-card {
+                padding: 20px;
+            }
+
+            .best-scores-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .profile-container {
+                padding: 80px 12px 20px 12px;
+            }
+
+            .profile-header {
+                padding: 20px 16px;
+            }
+
+            .stats-card {
+                padding: 16px;
+            }
+
+            .best-scores-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .score-item {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Menu Mobile Overlay -->
+    <div class="mobile-overlay" id="mobile-overlay"></div>
+
+    <!-- Menu Mobile -->
+    <div class="mobile-menu" id="mobile-menu">
+        <div class="mobile-menu-header">
+            <div class="mobile-logo">Suirodoku.com</div>
+            <button class="mobile-close" id="mobile-close">×</button>
+        </div>
+        
+        <div class="mobile-menu-content">
+            <div class="mobile-nav-section">
+                <div class="mobile-section-title">Navigation</div>
+                <button class="mobile-nav-item" onclick="navigateTo('home'); closeMobileMenu();">
+                    🏠 Home
+                </button>
+                <button class="mobile-nav-item" onclick="navigateTo('tutorial'); closeMobileMenu();">
+                    📚 How to Play
+                </button>
+                <button class="mobile-nav-item" onclick="navigateTo('leaderboard'); closeMobileMenu();">
+                    🏆 Leaderboards
+                </button>
+            </div>
+            
+            <!-- Section Account - Dynamique selon l'état de connexion -->
+            <div class="mobile-nav-section" id="mobile-auth-section">
+                <div class="mobile-section-title">Account</div>
+                <!-- Contenu dynamique injecté par JavaScript -->
+            </div>
+            
+            <div class="mobile-nav-section">
+                <div class="mobile-section-title">Legal</div>
+                <button class="mobile-nav-item" onclick="navigateTo('legal'); closeMobileMenu();">
+                    📄 Privacy & Terms
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Hamburger Button -->
+    <div class="mobile-hamburger" id="mobile-hamburger">
+        <div class="hamburger-line"></div>
+        <div class="hamburger-line"></div>
+        <div class="hamburger-line"></div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="logo" onclick="goToHome()">Suirodoku.com</div>
+        
+        <!-- Navigation Menu -->
+        <nav class="nav-menu">
+            <button class="nav-btn" onclick="navigateTo('tutorial')">
+                How to Play
+            </button>
+            
+            <button class="nav-btn" onclick="navigateTo('leaderboard')">
+                Leaderboards
+            </button>
+        </nav>
+        
+        <!-- Auth Buttons (Desktop) - Dynamique selon l'état de connexion -->
+        <div class="auth-buttons" id="desktop-auth-buttons">
+            <!-- Contenu dynamique injecté par JavaScript -->
+        </div>
+    </div>
+
+    <div class="main-content">
+        <!-- Profile Container -->
+        <div class="profile-container">
+            <!-- Loading State -->
+            <div class="loading-container" id="loading-container">
+                <div class="spinner"></div>
+                <div class="loading-text">Loading your profile...</div>
+            </div>
+
+            <!-- Profile Content (initially hidden) -->
+            <div id="profile-content" style="display: none;">
+                <!-- Profile Header -->
+                <div class="profile-header">
+                    <div class="profile-avatar" id="profile-avatar">?</div>
+                    <div class="profile-name" id="profile-name">Loading...</div>
+                    <div class="profile-email" id="profile-email">Loading...</div>
+                    <div class="profile-level" id="profile-level">🎮 Loading...</div>
+                    <button class="logout-btn" onclick="handleLogout()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+                            <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+                        </svg>
+                        Sign Out
+                    </button>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <!-- General Stats -->
+                    <div class="stats-card">
+                        <div class="stats-card-title">
+                            <span class="stats-card-icon">📊</span>
+                            General Statistics
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Total Games Played</span>
+                            <span class="stat-value" id="total-games">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Games Won</span>
+                            <span class="stat-value success" id="games-won">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Win Rate</span>
+                            <span class="stat-value highlight" id="win-rate">0%</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Average Score</span>
+                            <span class="stat-value" id="average-score">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Total Time Played</span>
+                            <span class="stat-value" id="total-time">0h 0m</span>
+                        </div>
+                    </div>
+
+                    <!-- Game Modes -->
+                    <div class="stats-card">
+                        <div class="stats-card-title">
+                            <span class="stats-card-icon">🎯</span>
+                            Game Modes
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Practice Games</span>
+                            <span class="stat-value" id="practice-games">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Ranked Games</span>
+                            <span class="stat-value highlight" id="ranked-games">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Current Performance</span>
+                            <span class="stat-value success" id="current-performance">0%</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Player Level</span>
+                            <span class="stat-value warning" id="player-level">Beginner</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Last Played</span>
+                            <span class="stat-value" id="last-played">Never</span>
+                        </div>
+                    </div>
+
+                    <!-- Best Scores -->
+                    <div class="stats-card" style="grid-column: 1 / -1;">
+                        <div class="stats-card-title">
+                            <span class="stats-card-icon">🏆</span>
+                            Best Scores by Difficulty
+                        </div>
+                        <div class="best-scores-grid">
+                            <div class="score-item">
+                                <div class="score-difficulty">🟢 Easy</div>
+                                <div class="score-label">Best Score</div>
+                                <div class="score-value" id="best-easy">0</div>
+                            </div>
+                            <div class="score-item">
+                                <div class="score-difficulty">🟡 Medium</div>
+                                <div class="score-label">Best Score</div>
+                                <div class="score-value" id="best-medium">0</div>
+                            </div>
+                            <div class="score-item">
+                                <div class="score-difficulty">🟠 Hard</div>
+                                <div class="score-label">Best Score</div>
+                                <div class="score-value" id="best-hard">0</div>
+                            </div>
+                            <div class="score-item">
+                                <div class="score-difficulty">🔴 Expert</div>
+                                <div class="score-label">Best Score</div>
+                                <div class="score-value" id="best-expert">0</div>
+                            </div>
+                            <div class="score-item">
+                                <div class="score-difficulty">⚫ Master</div>
+                                <div class="score-label">Best Score</div>
+                                <div class="score-value" id="best-master">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-tab"></div>
+        <div class="footer-content">
+            <div class="footer-bottom">
+                <div class="footer-copyright">
+                    © 2024 Suirodoku.com. All rights reserved.
+                </div>
+                <div class="footer-legal">
+                    <a onclick="navigateTo('legal')">Privacy Policy</a>
+                    <a onclick="navigateTo('legal')">Terms of Service</a>
+                    <a onclick="navigateTo('legal')">Contact</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // ============= GLOBAL VARIABLES =============
+        let currentUser = null;
+        let userStats = null;
+
+        // ============= FIREBASE FUNCTIONS =============
+        function initializeProfileAuth() {
+            if (typeof window.firebaseAuth === 'undefined') {
+                setTimeout(initializeProfileAuth, 100);
+                return;
+            }
+
+            const { auth, onAuthStateChanged } = window.firebaseAuth;
+
+            onAuthStateChanged(auth, (user) => {
+                currentUser = user;
+                if (user) {
+                    console.log('User authenticated:', user.email);
+                    loadUserProfile(user);
+                    updateHeaderAuthState(user);
+                } else {
+                    console.log('User not authenticated, redirecting...');
+                    // Rediriger vers la page d'authentification si pas connecté
+                    window.location.href = '../auth/';
+                }
+            });
+        }
+
+        // ============= GESTION DYNAMIQUE DU HEADER =============
+        async function updateHeaderAuthState(user) {
+            const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
+            const mobileAuthSection = document.getElementById('mobile-auth-section');
+            
+            if (user && desktopAuthButtons) {
+                // Récupérer les données utilisateur complètes
+                const userData = await getUserData(user);
+                
+                // Utilisateur connecté - Afficher menu utilisateur
+                const displayName = getDisplayName(userData);
+                const flag = userData.profile?.nationality ? getFlagEmoji(userData.profile.nationality) : '';
+                
+                desktopAuthButtons.innerHTML = `
+                    <div class="user-menu">
+                        <div class="user-name">
+                            <span class="user-flag">${flag}</span>
+                            <span>${displayName}</span>
+                        </div>
+                        <div class="dropdown-menu">
+                            <a href="../profile/">👤 My Profile</a>
+                            <a href="../stats/">📊 My Statistics</a>
+                            <a href="../settings/">⚙️ Settings</a>
+                            <a href="#" onclick="signOutUser()">🚪 Sign Out</a>
+                        </div>
+                    </div>
+                `;
+                
+                // Menu mobile
+                if (mobileAuthSection) {
+                    mobileAuthSection.innerHTML = `
+                        <div class="mobile-section-title">Account</div>
+                        <button class="mobile-nav-item" onclick="navigateTo('profile'); closeMobileMenu();">
+                            <span style="margin-right: 12px;">👤</span>
+                            My Profile
+                        </button>
+                        <button class="mobile-nav-item" onclick="navigateTo('stats'); closeMobileMenu();">
+                            <span style="margin-right: 12px;">📊</span>
+                            My Statistics
+                        </button>
+                        <button class="mobile-nav-item" onclick="navigateTo('settings'); closeMobileMenu();">
+                            <span style="margin-right: 12px;">⚙️</span>
+                            Settings
+                        </button>
+                        <button class="mobile-nav-item logout" onclick="handleLogout(); closeMobileMenu();">
+                            <span style="margin-right: 12px;">🚪</span>
+                            Sign Out
+                        </button>
+                    `;
+                }
+            } else if (desktopAuthButtons) {
+                // Utilisateur non connecté - Afficher bouton Login
+                desktopAuthButtons.innerHTML = `
+                    <button class="auth-btn login-btn" onclick="navigateTo('auth')">Log In</button>
+                `;
+                
+                if (mobileAuthSection) {
+                    mobileAuthSection.innerHTML = `
+                        <div class="mobile-section-title">Account</div>
+                        <button class="mobile-nav-item" onclick="navigateTo('auth'); closeMobileMenu();">
+                            Log In
+                        </button>
+                    `;
+                }
+            }
+        }
+
+        // Fonction de déconnexion
+        window.signOutUser = async function() {
+            const confirmed = confirm('Are you sure you want to sign out?');
+            if (!confirmed) return;
+
+            try {
+                const { auth, signOut } = window.firebaseAuth;
+                await signOut(auth);
+                console.log('✅ User signed out successfully');
+                
+                // Rediriger vers la page d'accueil
+                window.location.href = '../';
+            } catch (error) {
+                console.error('❌ Error signing out:', error);
+                alert('Error signing out. Please try again.');
+            }
+        };
+
+        async function loadUserProfile(user) {
+            try {
+                const { db, doc, getDoc } = window.firebaseAuth;
+                const userRef = doc(db, 'users', user.uid);
+                const userDoc = await getDoc(userRef);
+
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    userStats = userData.gameStats || {};
+                    
+                    // Mettre à jour l'interface avec les données utilisateur
+                    updateProfileUI(user, userStats);
+                } else {
+                    // Utilisateur sans données, créer un profil vide
+                    userStats = getDefaultStats();
+                    updateProfileUI(user, userStats);
+                }
+
+                // Masquer le loading et afficher le contenu
+                document.getElementById('loading-container').style.display = 'none';
+                document.getElementById('profile-content').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading user profile:', error);
+                showError('Failed to load profile data. Please try again.');
+            }
+        }
+
+        function getDefaultStats() {
+            return {
+                totalGamesPlayed: 0,
+                totalGamesWon: 0,
+                totalTimeSpent: 0,
+                averageTime: 0,
+                averageScore: 0,
+                bestScores: {
+                    easy: 0,
+                    medium: 0,
+                    hard: 0,
+                    expert: 0,
+                    master: 0
+                },
+                practiceGames: 0,
+                rankedGames: 0,
+                level: 'Beginner',
+                currentPerformance: 0,
+                lastPlayed: null
+            };
+        }
+
+        function updateProfileUI(user, stats) {
+            // Profile Header
+            const displayName = getDisplayName(user) || 'Anonymous Player';
+            const email = user.email || 'No email';
+            const avatarInitial = displayName.charAt(0).toUpperCase();
+
+            document.getElementById('profile-avatar').textContent = avatarInitial;
+            document.getElementById('profile-name').textContent = displayName;
+            document.getElementById('profile-email').textContent = email;
+            document.getElementById('profile-level').textContent = `🎮 ${stats.level || 'Beginner'}`;
+
+            // General Stats
+            const winRate = stats.totalGamesPlayed > 0 ? 
+                Math.round((stats.totalGamesWon / stats.totalGamesPlayed) * 100) : 0;
+            const totalHours = Math.floor((stats.totalTimeSpent || 0) / 3600);
+            const totalMinutes = Math.floor(((stats.totalTimeSpent || 0) % 3600) / 60);
+
+            document.getElementById('total-games').textContent = (stats.totalGamesPlayed || 0).toLocaleString();
+            document.getElementById('games-won').textContent = (stats.totalGamesWon || 0).toLocaleString();
+            document.getElementById('win-rate').textContent = `${winRate}%`;
+            document.getElementById('average-score').textContent = (stats.averageScore || 0).toLocaleString();
+            document.getElementById('total-time').textContent = `${totalHours}h ${totalMinutes}m`;
+
+            // Game Modes
+            document.getElementById('practice-games').textContent = (stats.practiceGames || 0).toLocaleString();
+            document.getElementById('ranked-games').textContent = (stats.rankedGames || 0).toLocaleString();
+            document.getElementById('current-performance').textContent = `${Math.round(stats.currentPerformance || 0)}%`;
+            document.getElementById('player-level').textContent = stats.level || 'Beginner';
+
+            const lastPlayed = stats.lastPlayed ? 
+                new Date(stats.lastPlayed.seconds * 1000).toLocaleDateString() : 'Never';
+            document.getElementById('last-played').textContent = lastPlayed;
+
+            // Best Scores
+            const bestScores = stats.bestScores || {};
+            document.getElementById('best-easy').textContent = (bestScores.easy || 0).toLocaleString();
+            document.getElementById('best-medium').textContent = (bestScores.medium || 0).toLocaleString();
+            document.getElementById('best-hard').textContent = (bestScores.hard || 0).toLocaleString();
+            document.getElementById('best-expert').textContent = (bestScores.expert || 0).toLocaleString();
+            document.getElementById('best-master').textContent = (bestScores.master || 0).toLocaleString();
+        }
+
+        async function handleLogout() {
+            const confirmed = confirm('Are you sure you want to sign out?');
+            if (!confirmed) return;
+
+            try {
+                const { auth, signOut } = window.firebaseAuth;
+                await signOut(auth);
+                console.log('User signed out successfully');
+                
+                // Rediriger vers la page d'accueil
+                window.location.href = '../';
+            } catch (error) {
+                console.error('Error signing out:', error);
+                alert('Failed to sign out. Please try again.');
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('loading-container').innerHTML = `
+                <div style="text-align: center; color: #ff3b30;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Error</div>
+                    <div style="font-size: 14px; color: #8e8e93;">${message}</div>
+                    <button onclick="location.reload()" style="
+                        margin-top: 20px;
+                        padding: 12px 24px;
+                        background: #007aff;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    ">Retry</button>
+                </div>
+            `;
+        }
+
+        // ============= NAVIGATION FUNCTIONS =============
+        function navigateTo(page) {
+            switch(page) {
+                case 'home':
+                    window.location.href = '../';
+                    break;
+                case 'profile':
+                    window.location.href = '../profile/';
+                    break;
+                case 'stats':
+                    window.location.href = '../stats/';
+                    break;
+                case 'settings':
+                    window.location.href = '../settings/';
+                    break;
+                case 'auth':
+                    window.location.href = '../auth/';
+                    break;
+                case 'tutorial':
+                    window.location.href = '../tutorial/';
+                    break;
+                case 'leaderboard':
+                    window.location.href = '../leaderboard/';
+                    break;
+                case 'legal':
+                    window.location.href = '../legal/';
+                    break;
+                default:
+                    console.log('Navigate to:', page);
+            }
+        }
+
+        function goToHome() {
+            window.location.href = '../';
+        }
+
+        // ============= MENU MOBILE =============
+        function openMobileMenu() {
+            const overlay = document.getElementById('mobile-overlay');
+            const menu = document.getElementById('mobile-menu');
+            const hamburger = document.getElementById('mobile-hamburger');
+            
+            overlay.classList.add('show');
+            menu.classList.add('show');
+            hamburger.classList.add('active');
+            
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMobileMenu() {
+            const overlay = document.getElementById('mobile-overlay');
+            const menu = document.getElementById('mobile-menu');
+            const hamburger = document.getElementById('mobile-hamburger');
+            
+            overlay.classList.remove('show');
+            menu.classList.remove('show');
+            hamburger.classList.remove('active');
+            
+            document.body.style.overflow = '';
+        }
+
+        // ============= INITIALIZATION =============
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Firebase Auth
+            initializeProfileAuth();
+
+            // Mobile menu handlers
+            const mobileHamburger = document.getElementById('mobile-hamburger');
+            const mobileOverlay = document.getElementById('mobile-overlay');
+            const mobileClose = document.getElementById('mobile-close');
+            
+            if (mobileHamburger) {
+                mobileHamburger.addEventListener('click', function() {
+                    if (this.classList.contains('active')) {
+                        closeMobileMenu();
+                    } else {
+                        openMobileMenu();
+                    }
+                });
+            }
+            
+            if (mobileOverlay) {
+                mobileOverlay.addEventListener('click', closeMobileMenu);
+            }
+            
+            if (mobileClose) {
+                mobileClose.addEventListener('click', closeMobileMenu);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -3,326 +3,506 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Legal - Suirodoku.com</title>
+    <title>Suirodoku.com</title>
     
     <!-- FAVICON -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDHP3A6BZXAx72fY0_BFJQe9y1F2Za_Xo8",
+            authDomain: "suirodoku-web.firebaseapp.com",
+            projectId: "suirodoku-web",
+            storageBucket: "suirodoku-web.firebasestorage.app",
+            messagingSenderId: "936879624195",
+            appId: "1:936879624195:web:e3d2682df7c9b213d87e36",
+            measurementId: "G-RPJXTCGLZN"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Make Firebase functions globally available
+        window.firebaseAuth = {
+            auth,
+            db,
+            onAuthStateChanged,
+            signOut,
+            doc,
+            getDoc
+        };
+
+        // ============= FONCTIONS GLOBALES DE PROFIL =============
+        
+        // Fonction pour obtenir le nom d'affichage selon les préférences
+        window.getDisplayName = function(userData) {
+            if (userData.profile?.displayPreference === 'gamertag' && userData.profile?.gamertag) {
+                return userData.profile.gamertag;
+            }
+            return userData.displayName || 'Anonymous';
+        };
+
+        // Fonction pour obtenir le drapeau selon la nationalité
+        window.getFlagEmoji = function(countryCode) {
+            const flags = {
+                'FR': '🇫🇷', 'US': '🇺🇸', 'GB': '🇬🇧', 'DE': '🇩🇪', 'ES': '🇪🇸',
+                'IT': '🇮🇹', 'JP': '🇯🇵', 'CN': '🇨🇳', 'BR': '🇧🇷', 'CA': '🇨🇦',
+                'AU': '🇦🇺', 'IN': '🇮🇳', 'RU': '🇷🇺', 'MX': '🇲🇽', 'KR': '🇰🇷',
+                'NL': '🇳🇱', 'SE': '🇸🇪', 'NO': '🇳🇴', 'DK': '🇩🇰', 'FI': '🇫🇮',
+                'CH': '🇨🇭', 'AT': '🇦🇹', 'BE': '🇧🇪', 'PL': '🇵🇱', 'PT': '🇵🇹'
+            };
+            return flags[countryCode] || '🌍';
+        };
+
+        // Fonction pour vérifier si le profil est complet
+        window.isProfileComplete = function(userData) {
+            return userData.profile?.isProfileComplete === true;
+        };
+
+        // Fonction pour récupérer les données utilisateur complètes
+        window.getUserData = async function(user) {
+            try {
+                const userRef = doc(db, 'users', user.uid);
+                const userDoc = await getDoc(userRef);
+                
+                if (userDoc.exists()) {
+                    return { ...user, ...userDoc.data() };
+                }
+                return user;
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+                return user;
+            }
+        };
+
+        console.log('🔥 Firebase initialized on main page');
+    </script>
+    
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Styles pour le header dynamique -->
     <style>
-        /* Styles de base repris de votre CSS */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* ============= HEADER DYNAMIQUE - STYLES ============= */
+        .user-menu {
+            position: relative;
+            display: inline-block;
         }
 
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #1a1a1a;
-            color: #ffffff;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Header Styles */
-        .header {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 0 24px;
-            height: 64px;
+        .user-name {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .logo {
-            font-size: 24px;
-            font-weight: 800;
-            color: #ffffff;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .nav-menu {
-            display: flex;
-            gap: 24px;
-        }
-
-        .nav-btn {
-            background: none;
-            border: none;
-            color: #ffffff;
-            font-size: 14px;
-            font-weight: 500;
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .nav-btn:hover {
+            gap: 8px;
+            padding: 10px 16px;
             background: rgba(255, 255, 255, 0.1);
-        }
-
-        .auth-buttons {
-            display: flex;
-            gap: 12px;
-        }
-
-        .auth-btn {
-            background: #007AFF;
-            border: none;
-            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #4a5568;
             font-size: 14px;
             font-weight: 600;
-            padding: 10px 20px;
-            border-radius: 8px;
             cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
+            transition: all 0.3s ease;
         }
 
-        .auth-btn:hover {
-            background: #0056CC;
+        .user-name:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #2d3748;
         }
 
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 40px 24px;
-            width: 100%;
+        .user-name::after {
+            content: '▼';
+            font-size: 10px;
+            transition: transform 0.3s ease;
         }
 
-        .page-title {
-            font-size: 36px;
-            font-weight: 800;
-            margin-bottom: 16px;
-            text-align: center;
+        .user-menu:hover .user-name::after {
+            transform: rotate(180deg);
         }
 
-        .page-subtitle {
-            font-size: 18px;
-            color: #B3B3B3;
-            text-align: center;
-            margin-bottom: 48px;
-        }
-
-        .legal-section {
-            margin-bottom: 40px;
-        }
-
-        .section-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 16px;
-            color: #007AFF;
-        }
-
-        .section-content {
-            font-size: 16px;
-            line-height: 1.6;
-            color: #E5E5EA;
-            margin-bottom: 16px;
-        }
-
-        .contact-info {
-            background: rgba(255, 255, 255, 0.05);
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border: 1px solid rgba(229, 229, 234, 0.3);
             border-radius: 12px;
-            padding: 24px;
-            margin-top: 32px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            backdrop-filter: blur(10px);
         }
 
-        .contact-title {
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 12px;
+        .user-menu:hover .dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
         }
 
-        .contact-email {
-            color: #007AFF;
+        .dropdown-menu a {
+            display: block;
+            padding: 14px 20px;
+            color: #1c1c1e;
             text-decoration: none;
+            font-size: 14px;
             font-weight: 500;
+            transition: all 0.2s ease;
+            border-bottom: 1px solid rgba(229, 229, 234, 0.3);
         }
 
-        .contact-email:hover {
-            text-decoration: underline;
+        .dropdown-menu a:last-child {
+            border-bottom: none;
         }
 
-        /* Footer Styles */
-        .footer {
-            background: rgba(255, 255, 255, 0.05);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 24px;
-            text-align: center;
+        .dropdown-menu a:hover {
+            background: rgba(0, 122, 255, 0.05);
+            color: #007aff;
         }
 
-        .footer-content {
-            max-width: 1200px;
-            margin: 0 auto;
+        .dropdown-menu a:first-child {
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
         }
 
-        .footer-bottom {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 16px;
+        .dropdown-menu a:last-child {
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
         }
 
-        .footer-copyright {
-            color: #B3B3B3;
-            font-size: 14px;
+        .user-flag {
+            font-size: 16px;
+            margin-right: 4px;
         }
 
-        .footer-legal {
-            display: flex;
-            gap: 24px;
-        }
-
-        .footer-legal a {
-            color: #B3B3B3;
-            text-decoration: none;
-            font-size: 14px;
-            cursor: pointer;
-        }
-
-        .footer-legal a:hover {
-            color: #ffffff;
-        }
-
-        /* Mobile Responsive */
-        @media (max-width: 768px) {
-            .header {
-                padding: 0 16px;
-            }
-
-            .nav-menu {
-                display: none;
-            }
-
-            .main-content {
-                padding: 24px 16px;
-            }
-
-            .page-title {
-                font-size: 28px;
-            }
-
-            .section-title {
-                font-size: 20px;
-            }
-
-            .footer-bottom {
-                flex-direction: column;
-                text-align: center;
-            }
+        .signup-btn:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
     </style>
 </head>
 <body>
-    <!-- Header -->
-    <div class="header">
-        <div class="logo" onclick="goToHome()">Suirodoku.com</div>
-        
-        <!-- Navigation Menu (Desktop) -->
-        <nav class="nav-menu">
-            <button class="nav-btn" onclick="navigateTo('tutorial')">
-                How to Play
-            </button>
-            
-            <button class="nav-btn" onclick="navigateTo('leaderboard')">
-                Leaderboards
-            </button>
-        </nav>
-        
-        <!-- Auth Buttons (Desktop) -->
-        <div class="auth-buttons" id="desktop-auth-buttons">
-            <button class="auth-btn login-btn" onclick="navigateTo('auth')">Log In</button>
-        </div>
-    </div>
-
-    <!-- Main Content -->
     <div class="main-content">
-        <h1 class="page-title">Legal Information</h1>
-        <p class="page-subtitle">Privacy Policy, Terms of Service & Contact Information</p>
+        <!-- Menu Mobile Overlay -->
+        <div class="mobile-overlay" id="mobile-overlay"></div>
 
-        <div class="legal-section">
-            <h2 class="section-title">Privacy Policy</h2>
-            <div class="section-content">
-                <p>At Suirodoku.com, we respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information when you use our sudoku game platform.</p>
+        <!-- Menu Mobile -->
+        <div class="mobile-menu" id="mobile-menu">
+            <div class="mobile-menu-header">
+                <div class="mobile-logo">Suirodoku.com</div>
+                <button class="mobile-close" id="mobile-close">×</button>
+            </div>
+            
+            <div class="mobile-menu-content">
+                <div class="mobile-nav-section">
+                    <div class="mobile-section-title">Navigation</div>
+                    <button class="mobile-nav-item" onclick="navigateTo('tutorial'); closeMobileMenu();">
+                        How to Play
+                    </button>
+                    <button class="mobile-nav-item" onclick="navigateTo('leaderboard'); closeMobileMenu();">
+                        Leaderboards
+                    </button>
+                </div>
                 
-                <p><strong>Information We Collect:</strong></p>
-                <p>• Game statistics and progress data to enhance your gaming experience<br>
-                • Account information if you choose to create an account<br>
-                • Anonymous usage analytics to improve our platform</p>
+                <div class="mobile-nav-section">
+                    <div class="mobile-section-title">Game</div>
+                    <button class="mobile-nav-item" onclick="showNewGameModal(); closeMobileMenu();">
+                        New Game
+                    </button>
+                </div>
                 
-                <p><strong>How We Use Your Information:</strong></p>
-                <p>• To provide and maintain our game service<br>
-                • To track your game progress and statistics<br>
-                • To improve our platform and user experience</p>
+                <!-- Section Account - Dynamique selon l'état de connexion -->
+                <div class="mobile-nav-section" id="mobile-auth-section">
+                    <div class="mobile-section-title">Account</div>
+                    <!-- Contenu dynamique injecté par JavaScript -->
+                </div>
                 
-                <p><strong>Data Protection:</strong></p>
-                <p>We implement appropriate security measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction.</p>
+                <div class="mobile-nav-section">
+                    <div class="mobile-section-title">Legal</div>
+                    <button class="mobile-nav-item" onclick="navigateTo('legal'); closeMobileMenu();">
+                        Privacy & Terms
+                    </button>
+                </div>
             </div>
         </div>
 
-        <div class="legal-section">
-            <h2 class="section-title">Terms of Service</h2>
-            <div class="section-content">
-                <p>By accessing and using Suirodoku.com, you accept and agree to be bound by the terms and provision of this agreement.</p>
+        <!-- Error Modal -->
+        <div class="error-modal" id="error-modal">
+            <div class="error-icon">🔄</div>
+            <div class="error-text">Oops! Try again!</div>
+            <div class="error-subtext">Click "Correct" to clear the error and continue</div>
+        </div>
+
+        <!-- Header -->
+        <div class="header">
+            <div class="logo" onclick="goToHome()">Suirodoku.com</div>
+            
+            <!-- Navigation Menu (Desktop) -->
+            <nav class="nav-menu">
+                <button class="nav-btn" onclick="navigateTo('tutorial')">
+                    How to Play
+                </button>
                 
-                <p><strong>Use License:</strong></p>
-                <p>Permission is granted to temporarily use Suirodoku.com for personal, non-commercial transitory viewing only. This is the grant of a license, not a transfer of title.</p>
-                
-                <p><strong>User Conduct:</strong></p>
-                <p>• Use the platform responsibly and respectfully<br>
-                • Do not attempt to hack, exploit, or disrupt the service<br>
-                • Respect other users and maintain appropriate behavior</p>
-                
-                <p><strong>Disclaimer:</strong></p>
-                <p>The game is provided "as is" without any representations or warranties. We do not guarantee that the service will be uninterrupted or error-free.</p>
-                
-                <p><strong>Modifications:</strong></p>
-                <p>We reserve the right to revise these terms at any time without notice. By using this platform, you agree to be bound by the current version of these terms.</p>
+                <button class="nav-btn" onclick="navigateTo('leaderboard')">
+                    Leaderboards
+                </button>
+            </nav>
+            
+            <!-- Auth Buttons (Desktop) - Dynamique selon l'état de connexion -->
+            <div class="auth-buttons" id="desktop-auth-buttons">
+                <!-- Contenu dynamique injecté par JavaScript -->
             </div>
         </div>
 
-        <div class="legal-section">
-            <h2 class="section-title">Cookie Policy</h2>
-            <div class="section-content">
-                <p>Suirodoku.com uses cookies and similar technologies to enhance your gaming experience and analyze platform usage.</p>
-                
-                <p><strong>Types of Cookies We Use:</strong></p>
-                <p>• Essential cookies: Required for the platform to function properly<br>
-                • Analytics cookies: Help us understand how you use our platform<br>
-                • Preference cookies: Remember your settings and preferences</p>
-                
-                <p>You can control cookie settings through your browser preferences, though disabling certain cookies may affect platform functionality.</p>
+        <!-- Game Info -->
+        <div class="game-info">
+            <div class="game-info-content">
+                <!-- Stats du jeu (Desktop: inline, Mobile: dans .game-stats) -->
+                <div class="game-stats">
+                    <div class="info-item">
+                        <div class="info-label">Score</div>
+                        <div class="info-value score" id="score-display">2000</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Level</div>
+                        <div class="info-value" id="difficulty-display">Easy</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Errors</div>
+                        <div class="info-value" id="errors-count">0/5</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Time</div>
+                        <div class="info-value" id="game-time">00:00</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Hint</div>
+                        <div class="info-value hint-icon" style="color: #484848; font-size: 18px; cursor: pointer;" onclick="document.getElementById('hint-btn').click()">💡</div>
+                    </div>
+                </div>
+
+                <!-- Boutons d'action (Desktop: à droite, Mobile: à gauche) -->
+                <div class="pause-container">
+                    <!-- Bouton Hamburger Mobile - visible seulement sur mobile -->
+                    <div class="mobile-hamburger" id="mobile-hamburger">
+                        <div class="hamburger-line"></div>
+                        <div class="hamburger-line"></div>
+                        <div class="hamburger-line"></div>
+                    </div>
+                    <!-- Boutons dans l'ordre logique -->
+                    <button class="solve-btn" id="correct-btn" title="Correct the error" style="display: none;">Correct</button>
+                    <button class="solve-btn" id="reveal-btn" title="Complete the entire grid">Complete</button>
+                    <div style="width: 1px; height: 20px; background-color: #e5e5ea; margin: 0 8px;"></div>
+                    <button class="solve-btn" id="new-game-btn" title="Start a new game">New Game</button>
+                </div>
+
+                <div style="display: none;">
+                    <button id="hint-btn" title="Hint for selected cell"></button>
+                </div>
             </div>
         </div>
 
-        <div class="contact-info">
-            <h3 class="contact-title">Contact Us</h3>
-            <p class="section-content">If you have any questions about these legal terms, our privacy practices, or need support, please contact us:</p>
-            <p><strong>Email:</strong> <a href="mailto:contact@suirodoku.com" class="contact-email">contact@suirodoku.com</a></p>
-            <p class="section-content" style="margin-top: 16px; font-size: 14px; color: #B3B3B3;">
-                Last updated: December 2024
-            </p>
+        <!-- Main Game Container -->
+        <div class="game-container">
+            <!-- Sudoku Grid -->
+            <div class="sudoku-wrapper">
+                <div class="sudoku-grid" id="sudoku-grid">
+                    <!-- Les 81 cases seront générées par JavaScript -->
+                </div>
+            </div>
+
+            <!-- Controls Panel (Desktop) -->
+            <div class="controls-panel">
+                <!-- Numbers Section -->
+                <div class="control-section">
+                    <div class="control-header">
+                        <span class="control-title">NUMBERS</span>
+                        <button class="notes-toggle" id="notes-toggle-numbers"><span class="pencil-icon">✏️</span></button>
+                    </div>
+                    <div class="number-grid">
+                        <button class="number-btn" data-number="1">1</button>
+                        <button class="number-btn" data-number="2">2</button>
+                        <button class="number-btn" data-number="3">3</button>
+                        <button class="number-btn" data-number="4">4</button>
+                        <button class="number-btn" data-number="5">5</button>
+                        <button class="number-btn" data-number="6">6</button>
+                        <button class="number-btn" data-number="7">7</button>
+                        <button class="number-btn" data-number="8">8</button>
+                        <button class="number-btn" data-number="9">9</button>
+                    </div>
+                </div>
+
+                <!-- Colors Section -->
+                <div class="control-section" style="margin-top: 10px;">
+                    <div class="control-header">
+                        <span class="control-title">COLORS</span>
+                        <button class="notes-toggle" id="notes-toggle-colors"><span class="pencil-icon">✏️</span></button>
+                    </div>
+                    <div class="color-grid">
+                        <button class="color-btn color-yellow" data-color="J"></button>
+                        <button class="color-btn color-orange" data-color="O"></button>
+                        <button class="color-btn color-red" data-color="R"></button>
+                        <button class="color-btn color-green" data-color="G"></button>
+                        <button class="color-btn color-brown" data-color="P"></button>
+                        <button class="color-btn color-pink" data-color="M"></button>
+                        <button class="color-btn color-cyan" data-color="T"></button>
+                        <button class="color-btn color-blue" data-color="B"></button>
+                        <button class="color-btn color-purple" data-color="V"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Controls (Mobile) -->
+        <div class="bottom-controls">
+            <div class="bottom-row">
+                <!-- Numbers Section -->
+                <div class="control-section">
+                    <div class="control-header">
+                        <span class="control-title">NUMBERS</span>
+                        <button class="notes-toggle" id="notes-toggle-numbers-mobile"><span class="pencil-icon">✏️</span></button>
+                    </div>
+                    <div class="number-grid">
+                        <button class="number-btn" data-number="1">1</button>
+                        <button class="number-btn" data-number="2">2</button>
+                        <button class="number-btn" data-number="3">3</button>
+                        <button class="number-btn" data-number="4">4</button>
+                        <button class="number-btn" data-number="5">5</button>
+                        <button class="number-btn" data-number="6">6</button>
+                        <button class="number-btn" data-number="7">7</button>
+                        <button class="number-btn" data-number="8">8</button>
+                        <button class="number-btn" data-number="9">9</button>
+                    </div>
+                </div>
+
+                <!-- Colors Section -->
+                <div class="control-section">
+                    <div class="control-header">
+                        <span class="control-title">COLORS</span>
+                        <button class="notes-toggle" id="notes-toggle-colors-mobile"><span class="pencil-icon">✏️</span></button>
+                    </div>
+                    <div class="color-grid">
+                        <button class="color-btn color-yellow" data-color="J"></button>
+                        <button class="color-btn color-orange" data-color="O"></button>
+                        <button class="color-btn color-red" data-color="R"></button>
+                        <button class="color-btn color-green" data-color="G"></button>
+                        <button class="color-btn color-brown" data-color="P"></button>
+                        <button class="color-btn color-pink" data-color="M"></button>
+                        <button class="color-btn color-cyan" data-color="T"></button>
+                        <button class="color-btn color-blue" data-color="B"></button>
+                        <button class="color-btn color-purple" data-color="V"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Difficulty Selection Modal -->
+        <div class="modal-overlay" id="difficulty-modal">
+            <div class="difficulty-modal">
+                <div class="modal-title">Choose difficulty</div>
+                <div class="modal-subtitle">Select your challenge level</div>
+                
+                <div class="difficulty-grid">
+                    <div class="difficulty-option" data-difficulty="easy">
+                        <div class="difficulty-name">🟢 Easy</div>
+                        <div class="difficulty-details">Perfect for beginners</div>
+                        <div class="difficulty-stats">
+                            <span>74 hints • 2,000 pts</span>
+                            <span>💔 300 💡 150 ⏱️ 1/s</span>
+                        </div>
+                    </div>
+                    
+                    <div class="difficulty-option" data-difficulty="medium">
+                        <div class="difficulty-name">🟡 Medium</div>
+                        <div class="difficulty-details">A bit more challenging</div>
+                        <div class="difficulty-stats">
+                            <span>68 hints • 4,000 pts</span>
+                            <span>💔 500 💡 250 ⏱️ 2/s</span>
+                        </div>
+                    </div>
+                    
+                    <div class="difficulty-option" data-difficulty="hard">
+                        <div class="difficulty-name">🟠 Hard</div>
+                        <div class="difficulty-details">For experienced players</div>
+                        <div class="difficulty-stats">
+                            <span>60 hints • 8,000 pts</span>
+                            <span>💔 800 💡 400 ⏱️ 3/s</span>
+                        </div>
+                    </div>
+                    
+                    <div class="difficulty-option" data-difficulty="expert">
+                        <div class="difficulty-name">🔴 Expert</div>
+                        <div class="difficulty-details">Very challenging</div>
+                        <div class="difficulty-stats">
+                            <span>52 hints • 15,000 pts</span>
+                            <span>💔 1.2K 💡 600 ⏱️ 4/s</span>
+                        </div>
+                    </div>
+                    
+                    <div class="difficulty-option" data-difficulty="master">
+                        <div class="difficulty-name">⚫ Master</div>
+                        <div class="difficulty-details">For true experts only</div>
+                        <div class="difficulty-stats">
+                            <span>44 hints • 25,000 pts</span>
+                            <span>💔 2K 💡 1K ⏱️ 6/s</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Victory Modal -->
+        <div class="modal-overlay" id="victory-modal">
+            <div class="victory-modal">
+                <div class="victory-icon">🏆</div>
+                <div class="victory-title">Congratulations!</div>
+                <div class="victory-subtitle">You completed the puzzle!</div>
+                
+                <div class="victory-stats">
+                    <div class="victory-stat">
+                        <div class="stat-label">Final Score</div>
+                        <div class="stat-value" id="final-score">2,000</div>
+                    </div>
+                    <div class="victory-stat">
+                        <div class="stat-label">Time</div>
+                        <div class="stat-value" id="final-time">05:42</div>
+                    </div>
+                    <div class="victory-stat">
+                        <div class="stat-label">Difficulty</div>
+                        <div class="stat-value" id="final-difficulty">Easy</div>
+                    </div>
+                    <div class="victory-stat">
+                        <div class="stat-label">Errors</div>
+                        <div class="stat-value" id="final-errors">2/5</div>
+                    </div>
+                </div>
+                
+                <div class="victory-buttons">
+                    <button class="victory-btn primary" id="victory-new-game">New Game</button>
+                    <button class="victory-btn secondary" id="victory-close">Close</button>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- Footer -->
     <footer class="footer">
+        <div class="footer-tab"></div>
         <div class="footer-content">
             <div class="footer-bottom">
                 <div class="footer-copyright">
@@ -337,59 +517,152 @@
         </div>
     </footer>
 
+    <script src="script.js"></script>
+    
+    <!-- Script pour gestion dynamique du header -->
     <script>
-        // Navigation functions
-        function goToHome() {
-            window.location.href = '../';
-        }
-
-        function navigateTo(page) {
-            switch(page) {
-                case 'tutorial':
-                    window.location.href = '../tutorial/';
-                    break;
-                case 'leaderboard':
-                    window.location.href = '../leaderboard/';
-                    break;
-                case 'auth':
-                    window.location.href = '../auth/';
-                    break;
-                case 'profile':
-                    window.location.href = '../profile/';
-                    break;
-                case 'legal':
-                    // Already on legal page, just scroll to top
-                    window.scrollTo(0, 0);
-                    break;
-                default:
-                    window.location.href = '../';
-            }
-        }
-
-        // Dynamic header auth state (same as your main page)
-        function updateHeaderAuthState(user) {
+        // ============= GESTION DYNAMIQUE DU HEADER =============
+        
+        async function updateHeaderAuthState(user) {
             const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
+            const mobileAuthSection = document.getElementById('mobile-auth-section');
             
-            if (user) {
+            if (user && desktopAuthButtons) {
+                // Récupérer les données utilisateur complètes
+                const userData = await getUserData(user);
+                
+                // Utilisateur connecté - Afficher menu utilisateur
+                const displayName = getDisplayName(userData);
+                const flag = userData.profile?.nationality ? getFlagEmoji(userData.profile.nationality) : '';
+                
                 desktopAuthButtons.innerHTML = `
-                    <button class="auth-btn profile-btn" onclick="navigateTo('profile')">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
-                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                        </svg>
-                        Profile
-                    </button>
+                    <div class="user-menu">
+                        <div class="user-name">
+                            <span class="user-flag">${flag}</span>
+                            <span>${displayName}</span>
+                        </div>
+                        <div class="dropdown-menu">
+                            <a href="./profile/">👤 My Profile</a>
+                            <a href="./stats/">📊 My Statistics</a>
+                            <a href="./settings/">⚙️ Settings</a>
+                            <a href="#" onclick="signOutUser()">🚪 Sign Out</a>
+                        </div>
+                    </div>
                 `;
-            } else {
+                
+                // Menu mobile
+                if (mobileAuthSection) {
+                    mobileAuthSection.innerHTML = `
+                        <div class="mobile-section-title">Account</div>
+                        <button class="mobile-nav-item" onclick="navigateTo('profile'); closeMobileMenu();">
+                            <span style="margin-right: 12px;">👤</span>
+                            My Profile
+                        </button>
+                        <button class="mobile-nav-item" onclick="navigateTo('stats'); closeMobileMenu();">
+                            <span style="margin-right: 12px;">📊</span>
+                            My Statistics
+                        </button>
+                        <button class="mobile-nav-item" onclick="navigateTo('settings'); closeMobileMenu();">
+                            <span style="margin-right: 12px;">⚙️</span>
+                            Settings
+                        </button>
+                        <button class="mobile-nav-item" onclick="signOutUser(); closeMobileMenu();">
+                            <span style="margin-right: 12px;">🚪</span>
+                            Sign Out
+                        </button>
+                    `;
+                }
+            } else if (desktopAuthButtons) {
+                // Utilisateur non connecté - Afficher bouton Login
                 desktopAuthButtons.innerHTML = `
                     <button class="auth-btn login-btn" onclick="navigateTo('auth')">Log In</button>
                 `;
+                
+                if (mobileAuthSection) {
+                    mobileAuthSection.innerHTML = `
+                        <div class="mobile-section-title">Account</div>
+                        <button class="mobile-nav-item" onclick="navigateTo('auth'); closeMobileMenu();">
+                            Log In
+                        </button>
+                    `;
+                }
             }
         }
-
-        // Initialize auth state
+        
+        // Fonction de déconnexion
+        window.signOutUser = async function() {
+            try {
+                const { auth, signOut } = window.firebaseAuth;
+                await signOut(auth);
+                console.log('✅ User signed out successfully');
+                
+                // Mettre à jour l'interface immédiatement
+                updateHeaderAuthState(null);
+                
+                // Optionnel: rafraîchir la page
+                // window.location.reload();
+            } catch (error) {
+                console.error('❌ Error signing out:', error);
+                alert('Error signing out. Please try again.');
+            }
+        };
+        
+        // Écouter les changements d'état d'authentification
+        function initializeHeaderAuth() {
+            // Vérifier si Firebase est disponible
+            if (typeof window.firebaseAuth !== 'undefined') {
+                const { auth, onAuthStateChanged } = window.firebaseAuth;
+                
+                onAuthStateChanged(auth, (user) => {
+                    updateHeaderAuthState(user);
+                });
+            } else {
+                // Firebase pas encore chargé, réessayer
+                setTimeout(initializeHeaderAuth, 100);
+            }
+        }
+        
+        // Initialiser au chargement de la page
         document.addEventListener('DOMContentLoaded', function() {
+            // Afficher l'état par défaut (non connecté)
             updateHeaderAuthState(null);
+            
+            // Puis initialiser l'écoute Firebase
+            initializeHeaderAuth();
         });
+        
+        // Fonction navigateTo pour toutes les pages
+        function navigateTo(page) {
+            switch(page) {
+                case 'profile':
+                    window.location.href = './profile/';
+                    break;
+                case 'stats':
+                    window.location.href = './stats/';
+                    break;
+                case 'settings':
+                    window.location.href = './settings/';
+                    break;
+                case 'auth':
+                    window.location.href = './auth/';
+                    break;
+                case 'tutorial':
+                    window.location.href = './tutorial/';
+                    break;
+                case 'leaderboard':
+                    window.location.href = './leaderboard/';
+                    break;
+                case 'legal':
+                    window.location.href = './legal/';
+                    break;
+                default:
+                    console.log('Navigate to:', page);
+            }
+        }
+        
+        function goToHome() {
+            window.location.href = './';
+        }
     </script>
 </body>
 </html>

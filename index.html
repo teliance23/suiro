@@ -16,7 +16,7 @@
         // Import Firebase functions
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // Firebase configuration
         const firebaseConfig = {
@@ -41,7 +41,9 @@
             onAuthStateChanged,
             signOut,
             doc,
-            getDoc
+            getDoc,
+            setDoc,
+            updateDoc
         };
 
         // ============= FONCTIONS GLOBALES DE PROFIL =============
@@ -87,7 +89,213 @@
             }
         };
 
-        console.log('🔥 Firebase initialized on main page');
+        // ============= FONCTIONS FIREBASE POUR LES STATISTIQUES =============
+        
+        // Fonction pour mettre à jour SEULEMENT les statistiques du joueur
+        window.updatePlayerStatsOnly = async function(gameData) {
+            try {
+                const user = auth.currentUser;
+                if (!user) {
+                    throw new Error('User not authenticated');
+                }
+
+                console.log('🎮 Updating player stats with data:', gameData);
+                
+                // Appeler directement la fonction de mise à jour des stats
+                await updatePlayerStats(user.uid, gameData);
+                console.log(`✅ Player stats updated for ${gameData.gameMode} game:`, {
+                    difficulty: gameData.difficulty,
+                    time: gameData.time,
+                    score: gameData.finalScore,
+                    completed: gameData.isCompleted
+                });
+                
+            } catch (error) {
+                console.error('❌ Error updating player stats:', error);
+                throw error;
+            }
+        };
+
+        // Fonction pour récupérer les stats d'un joueur
+        window.getPlayerStats = async function(userId) {
+            try {
+                if (!userId) return null;
+                
+                const userRef = doc(db, 'users', userId);
+                const userDoc = await getDoc(userRef);
+                
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    return userData.gameStats || null;
+                } else {
+                    return null;
+                }
+            } catch (error) {
+                console.error('❌ Error getting player stats:', error);
+                return null;
+            }
+        };
+
+        // Fonction pour mettre à jour les stats du joueur
+        async function updatePlayerStats(userId, gameData) {
+            try {
+                const userRef = doc(db, 'users', userId);
+                const userDoc = await getDoc(userRef);
+                
+                let currentStats = {
+                    totalGamesPlayed: 0,
+                    totalGamesWon: 0,
+                    totalTimeSpent: 0,
+                    averageTime: 0,
+                    averageScore: 0,
+                    bestScores: {},
+                    practiceGames: 0,
+                    rankedGames: 0,
+                    level: 'Beginner',
+                    currentPerformance: 0,
+                    lastPlayed: new Date()
+                };
+
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    currentStats = { ...currentStats, ...(userData.gameStats || {}) };
+                }
+
+                // ============= CALCUL DU SCORE AVEC PÉNALITÉ JUSTE =============
+                const calculatedScore = calculateFairScore(gameData);
+
+                // ============= MISE À JOUR DU SCORE MOYEN PONDÉRÉ =============
+                const alpha = 0.3; // Coefficient de pondération
+                const previousAverage = currentStats.averageScore || gameData.initialScore;
+                const newAverageScore = Math.round(
+                    (alpha * calculatedScore) + ((1 - alpha) * previousAverage)
+                );
+
+                // ============= MISE À JOUR DES AUTRES STATISTIQUES =============
+                const isWin = gameData.isCompleted && gameData.performance >= 50;
+                const newTotalGames = currentStats.totalGamesPlayed + 1;
+                const newTotalWins = currentStats.totalGamesWon + (isWin ? 1 : 0);
+                const newTotalTime = currentStats.totalTimeSpent + gameData.time;
+                const newAverageTime = Math.round(newTotalTime / newTotalGames);
+
+                // Mettre à jour le compteur de mode
+                const newPracticeGames = gameData.gameMode === 'practice' ? 
+                    (currentStats.practiceGames || 0) + 1 : (currentStats.practiceGames || 0);
+                const newRankedGames = gameData.gameMode === 'ranked' ? 
+                    (currentStats.rankedGames || 0) + 1 : (currentStats.rankedGames || 0);
+
+                // Mettre à jour le meilleur score pour cette difficulté (seulement si gagné)
+                const currentBest = currentStats.bestScores?.[gameData.difficulty] || 0;
+                const newBestScores = { ...currentStats.bestScores };
+                if (gameData.isCompleted && gameData.finalScore > currentBest) {
+                    newBestScores[gameData.difficulty] = gameData.finalScore;
+                }
+
+                // Calculer le niveau basé sur les parties ranked gagnées
+                const newLevel = calculatePlayerLevel(newRankedGames, newTotalWins, gameData.gameMode === 'ranked' && isWin);
+
+                // Calculer la performance actuelle (basée sur le score moyen vs score initial moyen)
+                let newPerformance = currentStats.currentPerformance || 0;
+                if (gameData.gameMode === 'ranked') {
+                    // Performance basée sur le score moyen par rapport au score initial moyen
+                    const averageInitialScore = getAverageInitialScore();
+                    newPerformance = Math.round(((newAverageScore / averageInitialScore) * 100) * 100) / 100;
+                }
+
+                // ============= METTRE À JOUR LA BASE DE DONNÉES =============
+                const updatedStats = {
+                    totalGamesPlayed: newTotalGames,
+                    totalGamesWon: newTotalWins,
+                    totalTimeSpent: newTotalTime,
+                    averageTime: newAverageTime,
+                    averageScore: newAverageScore,
+                    bestScores: newBestScores,
+                    practiceGames: newPracticeGames,
+                    rankedGames: newRankedGames,
+                    level: newLevel,
+                    currentPerformance: Math.max(0, Math.min(100, newPerformance)),
+                    lastPlayed: new Date()
+                };
+
+                await updateDoc(userRef, {
+                    gameStats: updatedStats
+                }, { merge: true });
+
+                console.log('✅ Player stats updated successfully:', {
+                    totalGames: newTotalGames,
+                    averageScore: newAverageScore,
+                    calculatedScore: calculatedScore,
+                    finalScore: gameData.finalScore,
+                    level: newLevel
+                });
+
+            } catch (error) {
+                console.error('❌ Error updating player stats:', error);
+                throw error;
+            }
+        }
+
+        // ============= CALCUL DU SCORE AVEC PÉNALITÉ JUSTE =============
+        function calculateFairScore(gameData) {
+            const { finalScore, initialScore, isCompleted, errors, time, difficulty } = gameData;
+            
+            if (isCompleted) {
+                // Partie terminée avec succès : score réel
+                return finalScore;
+            }
+            
+            // ============= PÉNALITÉS POUR PARTIES NON TERMINÉES =============
+            
+            // 1. Base : score actuel au moment de l'abandon
+            let penalizedScore = finalScore;
+            
+            // 2. Pénalité de base pour abandon (20% du score initial)
+            const abandonPenalty = Math.round(initialScore * 0.20);
+            penalizedScore = Math.max(0, penalizedScore - abandonPenalty);
+            
+            // 3. Pénalité proportionnelle au temps joué
+            // Plus on abandonne tôt, plus la pénalité est forte
+            const expectedMinTime = getDifficultyMinTime(difficulty);
+            const timeRatio = Math.min(time / expectedMinTime, 1);
+            const timePenalty = Math.round(initialScore * 0.15 * (1 - timeRatio));
+            penalizedScore = Math.max(0, penalizedScore - timePenalty);
+            
+            // 4. Score minimum garanti (10% du score initial)
+            const minimumScore = Math.round(initialScore * 0.10);
+            penalizedScore = Math.max(minimumScore, penalizedScore);
+            
+            return penalizedScore;
+        }
+
+        // Temps minimum attendu par difficulté (en secondes)
+        function getDifficultyMinTime(difficulty) {
+            const minTimes = {
+                'easy': 180,    // 3 minutes
+                'medium': 300,  // 5 minutes  
+                'hard': 450,    // 7.5 minutes
+                'expert': 600,  // 10 minutes
+                'master': 900   // 15 minutes
+            };
+            return minTimes[difficulty] || 300;
+        }
+
+        // Score initial moyen pour calculer la performance
+        function getAverageInitialScore() {
+            return (2000 + 4000 + 8000 + 15000 + 25000) / 5; // 10,800
+        }
+
+        // Fonction pour calculer le niveau du joueur
+        function calculatePlayerLevel(rankedGames, totalWins, isRankedWin) {
+            if (rankedGames < 5) return 'Beginner';
+            if (rankedGames < 10) return 'Novice';
+            if (rankedGames < 25) return 'Intermediate';
+            if (rankedGames < 50) return 'Advanced';
+            if (rankedGames < 100) return 'Expert';
+            if (rankedGames < 200) return 'Master';
+            return 'Legend';
+        }
+
+        console.log('🔥 Firebase initialized on main page with stats functions');
     </script>
     
     <link rel="stylesheet" href="style.css">

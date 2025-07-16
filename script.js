@@ -116,10 +116,12 @@ const gameState = {
     hasError: false,
     showError: false,
     errorCell: null,
-    // ============= NOUVEAU : SYSTÈME FIREBASE =============
+    // ============= SYSTÈME FIREBASE UNIVERSEL =============
     gameMode: 'practice', // 'ranked' ou 'practice'
     gameStartTime: null, // Pour calculer le temps total
-    initialScore: 2000 // Score de départ pour calculer la performance
+    initialScore: 2000, // Score de départ pour calculer la performance
+    gameInProgress: false, // Pour savoir si on doit sauvegarder l'abandon
+    hasShownDefeatModal: false // Éviter les modals multiples
 };
 
 // ============= SYSTÈME UTILISATEUR =============
@@ -186,65 +188,64 @@ function isUserLoggedIn() {
     return currentUser !== null;
 }
 
-// ============= NOUVELLE FONCTION : SAUVEGARDER TOUTES LES PARTIES =============
-async function saveGameToFirebase() {
-    // Sauvegarder TOUTES les parties ranked, même celles échouées
-    if (!isUserLoggedIn() || gameState.gameMode !== 'ranked') {
-        console.log('🎯 Game not saved: user not logged in or practice mode');
-        return;
+// ============= SYSTÈME UNIVERSEL DE SAUVEGARDE =============
+
+// ⚡ NOUVELLE FONCTION : Sauvegarder TOUTES les parties (practice + ranked)
+async function saveUniversalGameData(gameData) {
+    // Sauvegarder TOUTES les parties si l'utilisateur est connecté
+    if (!isUserLoggedIn()) {
+        console.log('🎯 Game not saved: user not logged in');
+        return false; // Retourner false pour indiquer que la sauvegarde a échoué
     }
 
-    const config = getCurrentDifficultyConfig();
-    const performance = (gameState.score / gameState.initialScore) * 100;
-    
-    const gameData = {
-        difficulty: gameState.difficulty,
-        finalScore: gameState.score,
-        initialScore: gameState.initialScore,
-        time: gameState.time,
-        errors: gameState.errors,
-        isCompleted: true, // Partie terminée (même si score = 0)
-        performance: Math.round(performance * 100) / 100,
-        gameMode: gameState.gameMode,
-        completedAt: new Date()
-    };
-
-    console.log('💾 Attempting to save game data:', gameData);
+    console.log('💾 Saving universal game data:', gameData);
 
     try {
-        // ============= APPEL DIRECT AUX FONCTIONS FIREBASE =============
         if (typeof window.firebaseAuth !== 'undefined' && window.firebaseAuth.auth && window.firebaseAuth.auth.currentUser) {
-            const { auth, db, updateDoc, doc, getDoc } = window.firebaseAuth;
-            const userId = auth.currentUser.uid;
-            
-            console.log('🔥 Using Firebase directly to update stats...');
-            
-            // Mettre à jour les stats directement
-            await updatePlayerStatsDirectly(userId, gameData);
-            
-            console.log('✅ Game stats updated successfully!');
-            
-            // Mettre à jour les stats locales
+            await updatePlayerStatsDirectly(window.firebaseAuth.auth.currentUser.uid, gameData);
+            console.log('✅ Universal game stats updated successfully!');
             await updateLocalPlayerStats(gameData);
-            
+            return true; // Sauvegarde réussie
         } else {
             console.error('❌ Firebase not properly initialized');
             throw new Error('Firebase not available');
         }
     } catch (error) {
-        console.error('❌ Error saving game to Firebase:', error);
+        console.error('❌ Error saving universal game data:', error);
         
         // Essayer un deuxième appel après un délai
         setTimeout(async () => {
             try {
-                console.log('🔄 Retrying save...');
+                console.log('🔄 Retrying universal save...');
                 await updatePlayerStatsDirectly(currentUser.uid, gameData);
-                console.log('✅ Game stats updated on retry!');
+                console.log('✅ Universal game stats updated on retry!');
             } catch (retryError) {
-                console.error('❌ Retry failed:', retryError);
+                console.error('❌ Universal retry failed:', retryError);
             }
         }, 2000);
+        return false; // Sauvegarde échouée
     }
+}
+
+// ⚡ FONCTION POUR CRÉER LES DONNÉES DE JEU
+function createGameData(gameEndType = 'completed') {
+    const config = getCurrentDifficultyConfig();
+    const performance = (gameState.score / gameState.initialScore) * 100;
+    
+    return {
+        difficulty: gameState.difficulty,
+        finalScore: gameState.score,
+        initialScore: gameState.initialScore,
+        time: gameState.time,
+        errors: gameState.errors,
+        isCompleted: gameEndType === 'completed',
+        isAbandoned: gameEndType === 'abandoned',
+        isDefeated: gameEndType === 'defeated',
+        performance: Math.round(performance * 100) / 100,
+        gameMode: gameState.gameMode,
+        endedAt: new Date(),
+        endType: gameEndType // 'completed', 'defeated', 'abandoned'
+    };
 }
 
 // ============= FONCTION DIRECTE POUR METTRE À JOUR LES STATS =============
@@ -290,20 +291,20 @@ async function updatePlayerStatsDirectly(userId, gameData) {
         const newTotalTime = currentStats.totalTimeSpent + gameData.time;
         const newAverageTime = Math.round(newTotalTime / newTotalGames);
 
-        // Compteurs de mode
+        // ⚡ NOUVEAU : Compteurs de mode pour practice ET ranked
         const newPracticeGames = gameData.gameMode === 'practice' ? 
             (currentStats.practiceGames || 0) + 1 : (currentStats.practiceGames || 0);
         const newRankedGames = gameData.gameMode === 'ranked' ? 
             (currentStats.rankedGames || 0) + 1 : (currentStats.rankedGames || 0);
 
-        // Meilleurs scores
+        // Meilleurs scores (seulement si partie complétée avec succès)
         const currentBest = currentStats.bestScores?.[gameData.difficulty] || 0;
         const newBestScores = { ...currentStats.bestScores };
         if (gameData.isCompleted && gameData.finalScore > currentBest) {
             newBestScores[gameData.difficulty] = gameData.finalScore;
         }
 
-        // Niveau du joueur
+        // Niveau du joueur (basé sur les parties ranked)
         const newLevel = calculatePlayerLevel(newRankedGames, newTotalWins, gameData.gameMode === 'ranked' && isWin);
 
         // Performance actuelle
@@ -332,8 +333,12 @@ async function updatePlayerStatsDirectly(userId, gameData) {
             gameStats: updatedStats
         }, { merge: true });
 
-        console.log('📊 Player stats updated:', {
+        console.log('📊 Player stats updated (universal):', {
+            mode: gameData.gameMode,
+            endType: gameData.endType,
             totalGames: newTotalGames,
+            practiceGames: newPracticeGames,
+            rankedGames: newRankedGames,
             averageScore: newAverageScore,
             level: newLevel,
             finalScore: gameData.finalScore
@@ -347,7 +352,7 @@ async function updatePlayerStatsDirectly(userId, gameData) {
 
 // ============= FONCTIONS UTILITAIRES =============
 function calculateFairScore(gameData) {
-    const { finalScore, initialScore, isCompleted } = gameData;
+    const { finalScore, initialScore, isCompleted, isAbandoned, isDefeated } = gameData;
     
     if (isCompleted) {
         return finalScore; // Partie terminée avec succès
@@ -355,8 +360,14 @@ function calculateFairScore(gameData) {
     
     // Pénalités pour parties non terminées
     let penalizedScore = finalScore;
-    const abandonPenalty = Math.round(initialScore * 0.20);
-    penalizedScore = Math.max(0, penalizedScore - abandonPenalty);
+    
+    if (isAbandoned) {
+        // Pénalité d'abandon (20% du score initial)
+        const abandonPenalty = Math.round(initialScore * 0.20);
+        penalizedScore = Math.max(0, penalizedScore - abandonPenalty);
+    }
+    
+    // Score minimum garanti (10% du score initial)
     const minimumScore = Math.round(initialScore * 0.10);
     penalizedScore = Math.max(minimumScore, penalizedScore);
     
@@ -371,43 +382,6 @@ function calculatePlayerLevel(rankedGames, totalWins, isRankedWin) {
     if (rankedGames < 100) return 'Expert';
     if (rankedGames < 200) return 'Master';
     return 'Legend';
-}
-
-// ============= SAUVEGARDER PARTIES ABANDONNÉES =============
-async function saveAbandonedGameToFirebase() {
-    if (!isUserLoggedIn() || gameState.gameMode !== 'ranked') {
-        console.log('🎯 Abandoned game not saved: user not logged in or practice mode');
-        return;
-    }
-
-    const config = getCurrentDifficultyConfig();
-    const performance = (gameState.score / gameState.initialScore) * 100;
-    
-    const gameData = {
-        difficulty: gameState.difficulty,
-        finalScore: gameState.score,
-        initialScore: gameState.initialScore,
-        time: gameState.time,
-        errors: gameState.errors,
-        isCompleted: false, // Partie abandonnée
-        performance: Math.round(performance * 100) / 100,
-        gameMode: gameState.gameMode,
-        abandonedAt: new Date()
-    };
-
-    console.log('💾 Saving abandoned game:', gameData);
-
-    try {
-        if (typeof window.firebaseAuth !== 'undefined' && window.firebaseAuth.auth && window.firebaseAuth.auth.currentUser) {
-            await updatePlayerStatsDirectly(window.firebaseAuth.auth.currentUser.uid, gameData);
-            console.log('✅ Abandoned game stats updated');
-            await updateLocalPlayerStats(gameData);
-        } else {
-            console.error('❌ Firebase not available for abandoned game');
-        }
-    } catch (error) {
-        console.error('❌ Error saving abandoned game:', error);
-    }
 }
 
 async function updateLocalPlayerStats(gameData) {
@@ -429,7 +403,6 @@ async function updateLocalPlayerStats(gameData) {
             playerStats.bestScores[gameData.difficulty] = gameData.finalScore;
         }
         
-        // Recalculer le niveau (simplifié pour l'affichage local)
         updatePlayerLevelDisplay();
     }
 }
@@ -448,13 +421,175 @@ async function getPlayerStats() {
 }
 
 function updatePlayerLevelDisplay() {
-    // Afficher les stats du joueur dans l'interface
     if (playerStats) {
         const levelDisplay = document.getElementById('difficulty-display');
         if (levelDisplay && playerStats.level) {
             // Vous pouvez personaliser l'affichage ici
-            // levelDisplay.title = `Player Level: ${playerStats.level}`;
         }
+    }
+}
+
+// ============= NOUVEAUX MODALS : VICTOIRE ET DÉFAITE =============
+
+// ⚡ MODAL VICTOIRE AMÉLIORÉ
+async function showVictoryModal() {
+    const modal = document.getElementById('victory-modal');
+    const config = getCurrentDifficultyConfig();
+    
+    // Mettre à jour les stats de base
+    document.getElementById('final-score').textContent = gameState.score.toLocaleString();
+    document.getElementById('final-time').textContent = formatTime(gameState.time);
+    document.getElementById('final-difficulty').textContent = config.name;
+    document.getElementById('final-errors').textContent = `${gameState.errors}/${gameState.maxErrors}`;
+    
+    // ⚡ NOUVEAU : Créer et sauvegarder les données de victoire
+    const gameData = createGameData('completed');
+    const wasSaved = await saveUniversalGameData(gameData);
+    
+    // ⚡ NOUVEAU : Afficher les infos de mode et sauvegarde
+    const statsContainer = document.querySelector('.victory-stats');
+    
+    // Supprimer les anciens éléments ajoutés
+    const existingModeInfo = statsContainer.querySelector('.mode-stat');
+    const existingSaveInfo = statsContainer.querySelector('.save-stat');
+    if (existingModeInfo) existingModeInfo.remove();
+    if (existingSaveInfo) existingSaveInfo.remove();
+    
+    // Mode de jeu
+    const modeInfo = document.createElement('div');
+    modeInfo.className = 'victory-stat mode-stat';
+    modeInfo.innerHTML = `
+        <div class="stat-label">Game Mode</div>
+        <div class="stat-value">${gameState.gameMode === 'ranked' ? '🏆 Ranked' : '🎯 Practice'}</div>
+    `;
+    statsContainer.appendChild(modeInfo);
+    
+    // Sauvegarde (seulement si connecté)
+    if (isUserLoggedIn()) {
+        const saveInfo = document.createElement('div');
+        saveInfo.className = 'victory-stat save-stat';
+        saveInfo.innerHTML = `
+            <div class="stat-label">Statistics</div>
+            <div class="stat-value" style="color: ${wasSaved ? '#28a745' : '#dc3545'}">${wasSaved ? '✅ Saved' : '❌ Error'}</div>
+        `;
+        statsContainer.appendChild(saveInfo);
+    }
+    
+    modal.classList.add('show');
+}
+
+// ⚡ NOUVEAU : MODAL DÉFAITE (5 erreurs ou score = 0)
+async function showDefeatModal(defeatReason = '5 errors') {
+    // Éviter d'afficher plusieurs fois le modal
+    if (gameState.hasShownDefeatModal) return;
+    gameState.hasShownDefeatModal = true;
+    
+    let modal = document.getElementById('defeat-modal');
+    
+    // Créer le modal s'il n'existe pas
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'defeat-modal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="defeat-modal">
+                <div class="defeat-icon">💔</div>
+                <div class="defeat-title">Game Over!</div>
+                <div class="defeat-subtitle">You've reached the limit</div>
+                
+                <div class="defeat-reason" id="defeat-reason">${defeatReason}</div>
+                
+                <div class="defeat-stats">
+                    <div class="defeat-stat">
+                        <div class="stat-label">Current Score</div>
+                        <div class="stat-value" id="defeat-score">${gameState.score.toLocaleString()}</div>
+                    </div>
+                    <div class="defeat-stat">
+                        <div class="stat-label">Time Played</div>
+                        <div class="stat-value" id="defeat-time">${formatTime(gameState.time)}</div>
+                    </div>
+                    <div class="defeat-stat">
+                        <div class="stat-label">Game Mode</div>
+                        <div class="stat-value" id="defeat-mode">${gameState.gameMode === 'ranked' ? '🏆 Ranked' : '🎯 Practice'}</div>
+                    </div>
+                    <div class="defeat-stat" id="defeat-save-stat" style="display: none;">
+                        <div class="stat-label">Statistics</div>
+                        <div class="stat-value" id="defeat-save-status">💾 Saving...</div>
+                    </div>
+                </div>
+                
+                <div class="defeat-message">
+                    <p>🎮 <strong>You can continue playing on this grid!</strong></p>
+                    <p>Your timer is stopped and score won't change.</p>
+                </div>
+                
+                <div class="defeat-buttons">
+                    <button class="defeat-btn primary" id="defeat-continue">Continue Playing</button>
+                    <button class="defeat-btn secondary" id="defeat-new-game">New Game</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Ajouter les event listeners
+        document.getElementById('defeat-continue').addEventListener('click', () => {
+            closeDefeatModal();
+        });
+        
+        document.getElementById('defeat-new-game').addEventListener('click', () => {
+            closeDefeatModal();
+            showNewGameModal();
+        });
+        
+        // Fermer si clic en dehors
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeDefeatModal();
+            }
+        });
+    }
+    
+    // Mettre à jour les contenus
+    document.getElementById('defeat-reason').textContent = defeatReason;
+    document.getElementById('defeat-score').textContent = gameState.score.toLocaleString();
+    document.getElementById('defeat-time').textContent = formatTime(gameState.time);
+    document.getElementById('defeat-mode').textContent = gameState.gameMode === 'ranked' ? '🏆 Ranked' : '🎯 Practice';
+    
+    // ⚡ SAUVEGARDER LES DONNÉES DE DÉFAITE
+    if (isUserLoggedIn()) {
+        const saveStatDiv = document.getElementById('defeat-save-stat');
+        const saveStatusDiv = document.getElementById('defeat-save-status');
+        saveStatDiv.style.display = 'block';
+        saveStatusDiv.textContent = '💾 Saving...';
+        saveStatusDiv.style.color = '#6c757d';
+        
+        const gameData = createGameData('defeated');
+        const wasSaved = await saveUniversalGameData(gameData);
+        
+        saveStatusDiv.textContent = wasSaved ? '✅ Saved' : '❌ Error';
+        saveStatusDiv.style.color = wasSaved ? '#28a745' : '#dc3545';
+    } else {
+        document.getElementById('defeat-save-stat').style.display = 'none';
+    }
+    
+    modal.classList.add('show');
+}
+
+function closeDefeatModal() {
+    const modal = document.getElementById('defeat-modal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+// ⚡ FONCTION SIMPLIFIÉE : Sauvegarder abandon directement (SEULEMENT après 1 minute)
+async function saveAbandonedGame() {
+    if (gameState.gameInProgress && isUserLoggedIn() && gameState.time >= 60) {
+        console.log('💾 Saving abandoned game (played for ' + gameState.time + ' seconds)...');
+        const gameData = createGameData('abandoned');
+        await saveUniversalGameData(gameData);
+    } else if (gameState.gameInProgress && gameState.time < 60) {
+        console.log('⏳ Game too short (' + gameState.time + 's), not saving abandoned game');
     }
 }
 
@@ -516,7 +651,7 @@ function rearrangeString(str) {
     return str;
 }
 
-// ============= SYSTÈME DE GESTION D'ERREUR =============
+// ============= SYSTÈME DE GESTION D'ERREUR AMÉLIORÉ =============
 
 function updateErrorDisplay() {
     const errorElement = document.getElementById('errors-count');
@@ -543,7 +678,7 @@ function showErrorModal() {
     }, 3000);
 }
 
-function setErrorState(row, col) {
+async function setErrorState(row, col) {
     gameState.hasError = true;
     gameState.showError = true;
     gameState.errorCell = [row, col];
@@ -558,19 +693,15 @@ function setErrorState(row, col) {
     
     updateErrorDisplay();
     
+    // ⚡ NOUVEAU : Gestion des 5 erreurs avec modal défaite
     if (gameState.errors >= 5) {
         clearInterval(gameTimer);
         updateScore(0);
         
         if (gameState.errors === 5) {
             setTimeout(async () => {
-                alert(`5 errors reached!\nTimer stopped, score reset to 0.\nYou can continue playing but beware of more errors!`);
-                
-                // ============= SAUVEGARDER PARTIE ÉCHOUÉE =============
-                if (gameState.gameMode === 'ranked') {
-                    console.log('💾 Saving failed game due to 5 errors...');
-                    await saveGameToFirebase(); // Sauvegarder même avec score = 0
-                }
+                // ⚡ AFFICHER LE MODAL DE DÉFAITE au lieu de l'alert
+                await showDefeatModal('5 errors reached!');
             }, 100);
         }
     }
@@ -924,7 +1055,7 @@ function generateHints(grid, count) {
     return { grid: newGrid, hintsPositions };
 }
 
-// ============= CHRONOMÈTRE =============
+// ============= CHRONOMÈTRE AMÉLIORÉ =============
 let gameTimer = null;
 function startTimer() {
     if (gameTimer) clearInterval(gameTimer);
@@ -937,17 +1068,13 @@ function startTimer() {
             const newScore = gameState.score - config.timeDecrement;
             updateScore(newScore, false);
             
+            // ⚡ NOUVEAU : Gestion du score = 0 avec modal défaite
             if (gameState.score <= 0) {
                 gameState.isPlaying = false;
                 clearInterval(gameTimer);
                 
-                // ============= SAUVEGARDER PARTIE ÉCHOUÉE (SCORE = 0) =============
-                if (gameState.gameMode === 'ranked') {
-                    console.log('💾 Saving failed game due to time/score = 0...');
-                    await saveGameToFirebase(); // Sauvegarder même avec score = 0
-                }
-                
-                alert(`Time's up! Your score reached zero.\nTime survived: ${formatTime(gameState.time)}`);
+                // ⚡ AFFICHER LE MODAL DE DÉFAITE au lieu de l'alert
+                await showDefeatModal('Time\'s up! Score reached zero.');
             }
         }
     }, 1000);
@@ -1372,7 +1499,10 @@ function handleVisibilityChange() {
 
 // ============= MODIFICATION : SÉLECTION DIFFICULTÉ + MODE =============
 
-function changeDifficulty(newDifficulty, gameMode = 'practice') {
+async function changeDifficulty(newDifficulty, gameMode = 'practice') {
+    // ⚡ NOUVEAU : Sauvegarder l'abandon si partie en cours
+    await saveAbandonedGame();
+    
     gameState.difficulty = newDifficulty;
     gameState.gameMode = gameMode;
     
@@ -1402,7 +1532,10 @@ function closeModal() {
     modal.classList.remove('show');
 }
 
-function showNewGameModal() {
+async function showNewGameModal() {
+    // ⚡ NOUVEAU : Sauvegarder l'abandon si partie en cours
+    await saveAbandonedGame();
+    
     // Vérifier si un modal de mode existe déjà
     const existingModeModal = document.querySelector('.mode-selection-modal');
     if (existingModeModal) {
@@ -1421,13 +1554,13 @@ function showNewGameModal() {
                 <button class="mode-option practice-mode" data-mode="practice">
                     <div class="mode-icon">🎯</div>
                     <div class="mode-name">Practice</div>
-                    <div class="mode-description">Play casually without affecting your ranking</div>
+                    <div class="mode-description">Play casually${isUserLoggedIn() ? ' and save your progress' : ' without saving'}</div>
                 </button>
                 
                 <button class="mode-option ranked-mode" data-mode="ranked">
                     <div class="mode-icon">🏆</div>
                     <div class="mode-name">Ranked</div>
-                    <div class="mode-description">Compete and save your best scores</div>
+                    <div class="mode-description">Compete and save your best scores${!isUserLoggedIn() ? ' (Login required)' : ''}</div>
                 </button>
             </div>
         </div>
@@ -1488,18 +1621,17 @@ function giveHint() {
     updateDisplay();
 }
 
-function revealGrid() {
+// ⚡ FONCTION REVEAL AMÉLIORÉE AVEC SAUVEGARDE
+async function revealGrid() {
     if (gameState.hasError) return;
     
+    // ⚡ NOUVEAU : Sauvegarder l'abandon AVANT de révéler
+    await saveAbandonedGame();
+    
     gameState.isPlaying = false;
+    gameState.gameInProgress = false; // Partie terminée
     clearInterval(gameTimer);
     updateScore(0);
-    
-    // ============= SAUVEGARDER PARTIE ABANDONNÉE =============
-    if (gameState.gameMode === 'ranked') {
-        console.log('💾 Saving abandoned game (reveal used)...');
-        saveAbandonedGameToFirebase();
-    }
     
     for (let row = 0; row < 9; row++) {
         for (let col = 0; col < 9; col++) {
@@ -1512,7 +1644,7 @@ function revealGrid() {
     updateDisplay();
 }
 
-function checkWinCondition() {
+async function checkWinCondition() {
     for (let row = 0; row < 9; row++) {
         for (let col = 0; col < 9; col++) {
             const currentNorm = normalizeValue(gameState.grid[row][col]);
@@ -1524,43 +1656,12 @@ function checkWinCondition() {
     }
     
     gameState.isPlaying = false;
+    gameState.gameInProgress = false; // Partie terminée
     clearInterval(gameTimer);
     
-    // ============= SAUVEGARDER PARTIE GAGNÉE =============
-    if (gameState.gameMode === 'ranked') {
-        console.log('🏆 Saving completed game...');
-        saveGameToFirebase();
-    }
-    
+    // ⚡ AFFICHER LE MODAL DE VICTOIRE AMÉLIORÉ
     showVictoryModal();
     return true;
-}
-
-function showVictoryModal() {
-    const modal = document.getElementById('victory-modal');
-    const config = getCurrentDifficultyConfig();
-    
-    document.getElementById('final-score').textContent = gameState.score.toLocaleString();
-    document.getElementById('final-time').textContent = formatTime(gameState.time);
-    document.getElementById('final-difficulty').textContent = config.name;
-    document.getElementById('final-errors').textContent = `${gameState.errors}/${gameState.maxErrors}`;
-    
-    // ============= NOUVEAU : AFFICHER INFOS MODE =============
-    const modeInfo = document.createElement('div');
-    modeInfo.className = 'victory-stat';
-    modeInfo.innerHTML = `
-        <div class="stat-label">Game Mode</div>
-        <div class="stat-value">${gameState.gameMode === 'ranked' ? '🏆 Ranked' : '🎯 Practice'}</div>
-    `;
-    
-    // Ajouter après les autres stats si pas déjà présent
-    const statsContainer = document.querySelector('.victory-stats');
-    if (statsContainer && !statsContainer.querySelector('.mode-stat')) {
-        modeInfo.classList.add('mode-stat');
-        statsContainer.appendChild(modeInfo);
-    }
-    
-    modal.classList.add('show');
 }
 
 function closeVictoryModal() {
@@ -1599,8 +1700,8 @@ function generateNewGame() {
     gameState.errors = 0;
     gameState.time = 0;
     gameState.score = config.initialScore;
-    gameState.initialScore = config.initialScore; // ============= NOUVEAU =============
-    gameState.gameStartTime = new Date(); // ============= NOUVEAU =============
+    gameState.initialScore = config.initialScore;
+    gameState.gameStartTime = new Date();
     gameState.isPlaying = true;
     gameState.isPaused = false;
     gameState.selectedCell = null;
@@ -1611,6 +1712,10 @@ function generateNewGame() {
     gameState.errorCell = null;
     gameState.notesMode = { numbers: false, colors: false };
     gameState.notes = {};
+    
+    // ⚡ NOUVEAU : Marquer qu'une partie est en cours
+    gameState.gameInProgress = true;
+    gameState.hasShownDefeatModal = false;
     
     enableAllControls();
     hideCorrectButton();
@@ -1632,7 +1737,6 @@ function generateNewGame() {
     updateDisplay();
     startTimer();
     
-    // ============= NOUVEAU : AFFICHER MODE ACTUEL =============
     console.log(`🎮 New game started - Mode: ${gameState.gameMode}, Difficulty: ${gameState.difficulty}`);
 }
 
@@ -1700,7 +1804,6 @@ document.addEventListener('DOMContentLoaded', function() {
         gameState.difficulty = 'easy';
     }
     
-    // ============= NOUVEAU : VÉRIFIER CONNEXION UTILISATEUR =============
     // Vérifier si Firebase est disponible
     if (typeof window.firebaseAuth !== 'undefined') {
         // Écouter les changements d'état de connexion
@@ -1748,7 +1851,6 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', () => handleInput('colors', btn.dataset.color));
     });
     
-    // ============= MODIFICATION : GESTION SÉLECTION DIFFICULTÉ + MODE =============
     document.querySelectorAll('.difficulty-option').forEach(option => {
         option.addEventListener('click', (e) => {
             const difficulty = option.dataset.difficulty;
@@ -1822,6 +1924,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'Escape') {
             closeModal();
             closeMobileMenu();
+            closeDefeatModal();
             return;
         }
         
@@ -1878,12 +1981,163 @@ document.addEventListener('DOMContentLoaded', function() {
     generateNewGame();
 });
 
-// ============= STYLES CSS POUR LES NOUVEAUX ÉLÉMENTS =============
+// ============= STYLES CSS POUR LES NOUVEAUX MODALS =============
 
 // Ajouter les styles CSS pour les nouveaux éléments
-const modeStyles = document.createElement('style');
-modeStyles.textContent = `
-    /* Modal de sélection de mode */
+const enhancedStyles = document.createElement('style');
+enhancedStyles.textContent = `
+    /* ============= MODAL DÉFAITE ============= */
+    .defeat-modal {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9));
+        backdrop-filter: blur(20px);
+        border: 2px solid rgba(220, 53, 69, 0.3);
+        border-radius: 25px;
+        padding: 40px;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+        transform: scale(0.8);
+        opacity: 0;
+        transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        text-align: center;
+    }
+
+    .modal-overlay.show .defeat-modal {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    .defeat-icon {
+        font-size: 72px;
+        margin-bottom: 20px;
+        animation: defeatPulse 1s ease-in-out;
+    }
+
+    @keyframes defeatPulse {
+        0%, 20%, 50%, 80%, 100% { 
+            transform: translateY(0) scale(1); 
+        }
+        40% { 
+            transform: translateY(-10px) scale(1.1); 
+        }
+        60% { 
+            transform: translateY(-5px) scale(1.05); 
+        }
+    }
+
+    .defeat-title {
+        font-size: 32px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #dc3545, #c82333);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 8px;
+    }
+
+    .defeat-subtitle {
+        font-size: 18px;
+        color: #666;
+        margin-bottom: 16px;
+    }
+
+    .defeat-reason {
+        font-size: 16px;
+        color: #dc3545;
+        font-weight: 600;
+        margin-bottom: 24px;
+        padding: 12px 20px;
+        background: rgba(220, 53, 69, 0.1);
+        border-radius: 12px;
+        border: 1px solid rgba(220, 53, 69, 0.2);
+    }
+
+    .defeat-stats {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .defeat-stat {
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(220, 53, 69, 0.2);
+        border-radius: 12px;
+        padding: 16px;
+        transition: transform 0.2s ease;
+    }
+
+    .defeat-stat:hover {
+        transform: translateY(-2px);
+    }
+
+    .defeat-message {
+        background: rgba(40, 167, 69, 0.1);
+        border: 1px solid rgba(40, 167, 69, 0.2);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 32px;
+        text-align: left;
+    }
+
+    .defeat-message p {
+        margin: 0 0 8px 0;
+        color: #155724;
+        font-size: 14px;
+        line-height: 1.4;
+    }
+
+    .defeat-message p:last-child {
+        margin-bottom: 0;
+        font-weight: 600;
+    }
+
+    .defeat-buttons {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+    }
+
+    .defeat-btn {
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        border: none;
+        min-width: 120px;
+    }
+
+    .defeat-btn.primary {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+
+    .defeat-btn.primary:hover {
+        background: linear-gradient(135deg, #20c997, #17a2b8);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(32, 201, 151, 0.4);
+    }
+
+    .defeat-btn.secondary {
+        background: linear-gradient(135deg, #6c757d, #5a6268);
+        color: white;
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+    }
+
+    .defeat-btn.secondary:hover {
+        background: linear-gradient(135deg, #5a6268, #495057);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(90, 98, 104, 0.4);
+    }
+
+    .defeat-btn:active {
+        transform: scale(0.95);
+    }
+
+    /* ============= MODAL MODE AMÉLIORÉ ============= */
     .mode-selection-modal {
         position: fixed;
         top: 0;
@@ -1985,13 +2239,14 @@ modeStyles.textContent = `
         line-height: 1.4;
     }
     
-    /* Responsive */
+    /* Responsive pour les modals */
     @media (max-width: 600px) {
         .mode-options {
             flex-direction: column;
         }
         
-        .mode-modal-content {
+        .mode-modal-content,
+        .defeat-modal {
             padding: 24px;
             margin: 16px;
         }
@@ -1999,17 +2254,20 @@ modeStyles.textContent = `
         .mode-option {
             padding: 20px 16px;
         }
-    }
-    
-    /* Style pour le game mode dans victory modal */
-    .victory-stats .mode-stat {
-        grid-column: span 2;
-        text-align: center;
-    }
-    
-    .victory-stats .mode-stat .stat-value {
-        font-size: 18px;
+        
+        .defeat-stats {
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        
+        .defeat-buttons {
+            flex-direction: column;
+        }
+        
+        .defeat-btn {
+            min-width: auto;
+        }
     }
 `;
 
-document.head.appendChild(modeStyles);
+document.head.appendChild(enhancedStyles);

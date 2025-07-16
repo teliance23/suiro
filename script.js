@@ -186,9 +186,11 @@ function isUserLoggedIn() {
     return currentUser !== null;
 }
 
+// ============= NOUVELLE FONCTION : SAUVEGARDER TOUTES LES PARTIES =============
 async function saveGameToFirebase() {
+    // Sauvegarder TOUTES les parties ranked, même celles échouées
     if (!isUserLoggedIn() || gameState.gameMode !== 'ranked') {
-        console.log('Game not saved: user not logged in or practice mode');
+        console.log('🎯 Game not saved: user not logged in or practice mode');
         return;
     }
 
@@ -201,31 +203,180 @@ async function saveGameToFirebase() {
         initialScore: gameState.initialScore,
         time: gameState.time,
         errors: gameState.errors,
-        isCompleted: true,
-        performance: Math.round(performance * 100) / 100, // 2 décimales
+        isCompleted: true, // Partie terminée (même si score = 0)
+        performance: Math.round(performance * 100) / 100,
         gameMode: gameState.gameMode,
         completedAt: new Date()
     };
 
+    console.log('💾 Attempting to save game data:', gameData);
+
     try {
-        // Appeler les fonctions Firebase de la page d'auth
-        if (typeof window.saveRankedGame === 'function') {
-            await window.saveRankedGame(gameData);
-            console.log('Game saved to Firebase:', gameData);
+        // ============= APPEL DIRECT AUX FONCTIONS FIREBASE =============
+        if (typeof window.firebaseAuth !== 'undefined' && window.firebaseAuth.auth && window.firebaseAuth.auth.currentUser) {
+            const { auth, db, updateDoc, doc, getDoc } = window.firebaseAuth;
+            const userId = auth.currentUser.uid;
+            
+            console.log('🔥 Using Firebase directly to update stats...');
+            
+            // Mettre à jour les stats directement
+            await updatePlayerStatsDirectly(userId, gameData);
+            
+            console.log('✅ Game stats updated successfully!');
             
             // Mettre à jour les stats locales
             await updateLocalPlayerStats(gameData);
+            
         } else {
-            console.error('Firebase functions not available');
+            console.error('❌ Firebase not properly initialized');
+            throw new Error('Firebase not available');
         }
     } catch (error) {
-        console.error('Error saving game to Firebase:', error);
-        alert('Failed to save game. Please check your connection.');
+        console.error('❌ Error saving game to Firebase:', error);
+        
+        // Essayer un deuxième appel après un délai
+        setTimeout(async () => {
+            try {
+                console.log('🔄 Retrying save...');
+                await updatePlayerStatsDirectly(currentUser.uid, gameData);
+                console.log('✅ Game stats updated on retry!');
+            } catch (retryError) {
+                console.error('❌ Retry failed:', retryError);
+            }
+        }, 2000);
     }
 }
 
+// ============= FONCTION DIRECTE POUR METTRE À JOUR LES STATS =============
+async function updatePlayerStatsDirectly(userId, gameData) {
+    try {
+        const { db, doc, getDoc, updateDoc } = window.firebaseAuth;
+        const userRef = doc(db, 'users', userId);
+        const userDoc = await getDoc(userRef);
+        
+        let currentStats = {
+            totalGamesPlayed: 0,
+            totalGamesWon: 0,
+            totalTimeSpent: 0,
+            averageTime: 0,
+            averageScore: 0,
+            bestScores: {},
+            practiceGames: 0,
+            rankedGames: 0,
+            level: 'Beginner',
+            currentPerformance: 0,
+            lastPlayed: new Date()
+        };
+
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            currentStats = { ...currentStats, ...(userData.gameStats || {}) };
+        }
+
+        // ============= CALCUL DES NOUVELLES STATS =============
+        const calculatedScore = calculateFairScore(gameData);
+        
+        // Score moyen pondéré
+        const alpha = 0.3;
+        const previousAverage = currentStats.averageScore || gameData.initialScore;
+        const newAverageScore = Math.round(
+            (alpha * calculatedScore) + ((1 - alpha) * previousAverage)
+        );
+
+        // Autres statistiques
+        const isWin = gameData.isCompleted && gameData.performance >= 50;
+        const newTotalGames = currentStats.totalGamesPlayed + 1;
+        const newTotalWins = currentStats.totalGamesWon + (isWin ? 1 : 0);
+        const newTotalTime = currentStats.totalTimeSpent + gameData.time;
+        const newAverageTime = Math.round(newTotalTime / newTotalGames);
+
+        // Compteurs de mode
+        const newPracticeGames = gameData.gameMode === 'practice' ? 
+            (currentStats.practiceGames || 0) + 1 : (currentStats.practiceGames || 0);
+        const newRankedGames = gameData.gameMode === 'ranked' ? 
+            (currentStats.rankedGames || 0) + 1 : (currentStats.rankedGames || 0);
+
+        // Meilleurs scores
+        const currentBest = currentStats.bestScores?.[gameData.difficulty] || 0;
+        const newBestScores = { ...currentStats.bestScores };
+        if (gameData.isCompleted && gameData.finalScore > currentBest) {
+            newBestScores[gameData.difficulty] = gameData.finalScore;
+        }
+
+        // Niveau du joueur
+        const newLevel = calculatePlayerLevel(newRankedGames, newTotalWins, gameData.gameMode === 'ranked' && isWin);
+
+        // Performance actuelle
+        let newPerformance = currentStats.currentPerformance || 0;
+        if (gameData.gameMode === 'ranked') {
+            const averageInitialScore = (2000 + 4000 + 8000 + 15000 + 25000) / 5; // 10,800
+            newPerformance = Math.round(((newAverageScore / averageInitialScore) * 100) * 100) / 100;
+        }
+
+        // ============= METTRE À JOUR LA BASE DE DONNÉES =============
+        const updatedStats = {
+            totalGamesPlayed: newTotalGames,
+            totalGamesWon: newTotalWins,
+            totalTimeSpent: newTotalTime,
+            averageTime: newAverageTime,
+            averageScore: newAverageScore,
+            bestScores: newBestScores,
+            practiceGames: newPracticeGames,
+            rankedGames: newRankedGames,
+            level: newLevel,
+            currentPerformance: Math.max(0, Math.min(100, newPerformance)),
+            lastPlayed: new Date()
+        };
+
+        await updateDoc(userRef, {
+            gameStats: updatedStats
+        }, { merge: true });
+
+        console.log('📊 Player stats updated:', {
+            totalGames: newTotalGames,
+            averageScore: newAverageScore,
+            level: newLevel,
+            finalScore: gameData.finalScore
+        });
+
+    } catch (error) {
+        console.error('❌ Error in updatePlayerStatsDirectly:', error);
+        throw error;
+    }
+}
+
+// ============= FONCTIONS UTILITAIRES =============
+function calculateFairScore(gameData) {
+    const { finalScore, initialScore, isCompleted } = gameData;
+    
+    if (isCompleted) {
+        return finalScore; // Partie terminée avec succès
+    }
+    
+    // Pénalités pour parties non terminées
+    let penalizedScore = finalScore;
+    const abandonPenalty = Math.round(initialScore * 0.20);
+    penalizedScore = Math.max(0, penalizedScore - abandonPenalty);
+    const minimumScore = Math.round(initialScore * 0.10);
+    penalizedScore = Math.max(minimumScore, penalizedScore);
+    
+    return penalizedScore;
+}
+
+function calculatePlayerLevel(rankedGames, totalWins, isRankedWin) {
+    if (rankedGames < 5) return 'Beginner';
+    if (rankedGames < 10) return 'Novice';
+    if (rankedGames < 25) return 'Intermediate';
+    if (rankedGames < 50) return 'Advanced';
+    if (rankedGames < 100) return 'Expert';
+    if (rankedGames < 200) return 'Master';
+    return 'Legend';
+}
+
+// ============= SAUVEGARDER PARTIES ABANDONNÉES =============
 async function saveAbandonedGameToFirebase() {
     if (!isUserLoggedIn() || gameState.gameMode !== 'ranked') {
+        console.log('🎯 Abandoned game not saved: user not logged in or practice mode');
         return;
     }
 
@@ -244,14 +395,18 @@ async function saveAbandonedGameToFirebase() {
         abandonedAt: new Date()
     };
 
+    console.log('💾 Saving abandoned game:', gameData);
+
     try {
-        if (typeof window.saveRankedGame === 'function') {
-            await window.saveRankedGame(gameData);
-            console.log('Abandoned game saved to Firebase:', gameData);
+        if (typeof window.firebaseAuth !== 'undefined' && window.firebaseAuth.auth && window.firebaseAuth.auth.currentUser) {
+            await updatePlayerStatsDirectly(window.firebaseAuth.auth.currentUser.uid, gameData);
+            console.log('✅ Abandoned game stats updated');
             await updateLocalPlayerStats(gameData);
+        } else {
+            console.error('❌ Firebase not available for abandoned game');
         }
     } catch (error) {
-        console.error('Error saving abandoned game:', error);
+        console.error('❌ Error saving abandoned game:', error);
     }
 }
 
@@ -262,9 +417,9 @@ async function updateLocalPlayerStats(gameData) {
     
     // Mettre à jour les stats locales pour l'affichage immédiat
     if (playerStats) {
-        playerStats.gamesPlayed = (playerStats.gamesPlayed || 0) + 1;
+        playerStats.totalGamesPlayed = (playerStats.totalGamesPlayed || 0) + 1;
         if (gameData.isCompleted) {
-            playerStats.gamesWon = (playerStats.gamesWon || 0) + 1;
+            playerStats.totalGamesWon = (playerStats.totalGamesWon || 0) + 1;
         }
         
         // Mettre à jour le meilleur score pour cette difficulté
@@ -408,12 +563,13 @@ function setErrorState(row, col) {
         updateScore(0);
         
         if (gameState.errors === 5) {
-            setTimeout(() => {
+            setTimeout(async () => {
                 alert(`5 errors reached!\nTimer stopped, score reset to 0.\nYou can continue playing but beware of more errors!`);
                 
-                // Sauvegarder partie échouée si classée
+                // ============= SAUVEGARDER PARTIE ÉCHOUÉE =============
                 if (gameState.gameMode === 'ranked') {
-                    saveAbandonedGameToFirebase();
+                    console.log('💾 Saving failed game due to 5 errors...');
+                    await saveGameToFirebase(); // Sauvegarder même avec score = 0
                 }
             }, 100);
         }
@@ -772,7 +928,7 @@ function generateHints(grid, count) {
 let gameTimer = null;
 function startTimer() {
     if (gameTimer) clearInterval(gameTimer);
-    gameTimer = setInterval(() => {
+    gameTimer = setInterval(async () => {
         if (gameState.isPlaying && !gameState.isPaused && gameState.errors < 5) {
             gameState.time++;
             document.getElementById('game-time').textContent = formatTime(gameState.time);
@@ -785,9 +941,10 @@ function startTimer() {
                 gameState.isPlaying = false;
                 clearInterval(gameTimer);
                 
-                // Sauvegarder partie échouée si classée
+                // ============= SAUVEGARDER PARTIE ÉCHOUÉE (SCORE = 0) =============
                 if (gameState.gameMode === 'ranked') {
-                    saveAbandonedGameToFirebase();
+                    console.log('💾 Saving failed game due to time/score = 0...');
+                    await saveGameToFirebase(); // Sauvegarder même avec score = 0
                 }
                 
                 alert(`Time's up! Your score reached zero.\nTime survived: ${formatTime(gameState.time)}`);
@@ -1338,8 +1495,9 @@ function revealGrid() {
     clearInterval(gameTimer);
     updateScore(0);
     
-    // Sauvegarder partie abandonnée si classée
+    // ============= SAUVEGARDER PARTIE ABANDONNÉE =============
     if (gameState.gameMode === 'ranked') {
+        console.log('💾 Saving abandoned game (reveal used)...');
         saveAbandonedGameToFirebase();
     }
     
@@ -1368,8 +1526,9 @@ function checkWinCondition() {
     gameState.isPlaying = false;
     clearInterval(gameTimer);
     
-    // ============= NOUVEAU : SAUVEGARDER PARTIE GAGNÉE =============
+    // ============= SAUVEGARDER PARTIE GAGNÉE =============
     if (gameState.gameMode === 'ranked') {
+        console.log('🏆 Saving completed game...');
         saveGameToFirebase();
     }
     
@@ -1474,7 +1633,7 @@ function generateNewGame() {
     startTimer();
     
     // ============= NOUVEAU : AFFICHER MODE ACTUEL =============
-    console.log(`New game started - Mode: ${gameState.gameMode}, Difficulty: ${gameState.difficulty}`);
+    console.log(`🎮 New game started - Mode: ${gameState.gameMode}, Difficulty: ${gameState.difficulty}`);
 }
 
 // ============= NAVIGATION =============
@@ -1550,14 +1709,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.firebaseAuth.auth.onAuthStateChanged((user) => {
                     currentUser = user;
                     if (user) {
-                        console.log('User logged in:', user.email);
+                        console.log('✅ User logged in:', user.email);
                         // Charger les stats du joueur
                         getPlayerStats().then(stats => {
                             playerStats = stats;
                             updatePlayerLevelDisplay();
                         });
                     } else {
-                        console.log('User logged out');
+                        console.log('❌ User logged out');
                         currentUser = null;
                         playerStats = null;
                     }

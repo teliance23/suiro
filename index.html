@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal - Suirodoku.com</title>
+    
+    <!-- FAVICON -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Styles de base repris de votre CSS */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header Styles */
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 0 24px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: #ffffff;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 24px;
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .auth-btn {
+            background: #007AFF;
+            border: none;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .auth-btn:hover {
+            background: #0056CC;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 24px;
+            width: 100%;
+        }
+
+        .page-title {
+            font-size: 36px;
+            font-weight: 800;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .page-subtitle {
+            font-size: 18px;
+            color: #B3B3B3;
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .legal-section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #007AFF;
+        }
+
+        .section-content {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #E5E5EA;
+            margin-bottom: 16px;
+        }
+
+        .contact-info {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 32px;
+        }
+
+        .contact-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .contact-email {
+            color: #007AFF;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .contact-email:hover {
+            text-decoration: underline;
+        }
+
+        /* Footer Styles */
+        .footer {
+            background: rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 24px;
+            text-align: center;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .footer-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .footer-copyright {
+            color: #B3B3B3;
+            font-size: 14px;
+        }
+
+        .footer-legal {
+            display: flex;
+            gap: 24px;
+        }
+
+        .footer-legal a {
+            color: #B3B3B3;
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .footer-legal a:hover {
+            color: #ffffff;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 0 16px;
+            }
+
+            .nav-menu {
+                display: none;
+            }
+
+            .main-content {
+                padding: 24px 16px;
+            }
+
+            .page-title {
+                font-size: 28px;
+            }
+
+            .section-title {
+                font-size: 20px;
+            }
+
+            .footer-bottom {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="logo" onclick="goToHome()">Suirodoku.com</div>
+        
+        <!-- Navigation Menu (Desktop) -->
+        <nav class="nav-menu">
+            <button class="nav-btn" onclick="navigateTo('tutorial')">
+                How to Play
+            </button>
+            
+            <button class="nav-btn" onclick="navigateTo('leaderboard')">
+                Leaderboards
+            </button>
+        </nav>
+        
+        <!-- Auth Buttons (Desktop) -->
+        <div class="auth-buttons" id="desktop-auth-buttons">
+            <button class="auth-btn login-btn" onclick="navigateTo('auth')">Log In</button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <h1 class="page-title">Legal Information</h1>
+        <p class="page-subtitle">Privacy Policy, Terms of Service & Contact Information</p>
+
+        <div class="legal-section">
+            <h2 class="section-title">Privacy Policy</h2>
+            <div class="section-content">
+                <p>At Suirodoku.com, we respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information when you use our sudoku game platform.</p>
+                
+                <p><strong>Information We Collect:</strong></p>
+                <p>• Game statistics and progress data to enhance your gaming experience<br>
+                • Account information if you choose to create an account<br>
+                • Anonymous usage analytics to improve our platform</p>
+                
+                <p><strong>How We Use Your Information:</strong></p>
+                <p>• To provide and maintain our game service<br>
+                • To track your game progress and statistics<br>
+                • To improve our platform and user experience</p>
+                
+                <p><strong>Data Protection:</strong></p>
+                <p>We implement appropriate security measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction.</p>
+            </div>
+        </div>
+
+        <div class="legal-section">
+            <h2 class="section-title">Terms of Service</h2>
+            <div class="section-content">
+                <p>By accessing and using Suirodoku.com, you accept and agree to be bound by the terms and provision of this agreement.</p>
+                
+                <p><strong>Use License:</strong></p>
+                <p>Permission is granted to temporarily use Suirodoku.com for personal, non-commercial transitory viewing only. This is the grant of a license, not a transfer of title.</p>
+                
+                <p><strong>User Conduct:</strong></p>
+                <p>• Use the platform responsibly and respectfully<br>
+                • Do not attempt to hack, exploit, or disrupt the service<br>
+                • Respect other users and maintain appropriate behavior</p>
+                
+                <p><strong>Disclaimer:</strong></p>
+                <p>The game is provided "as is" without any representations or warranties. We do not guarantee that the service will be uninterrupted or error-free.</p>
+                
+                <p><strong>Modifications:</strong></p>
+                <p>We reserve the right to revise these terms at any time without notice. By using this platform, you agree to be bound by the current version of these terms.</p>
+            </div>
+        </div>
+
+        <div class="legal-section">
+            <h2 class="section-title">Cookie Policy</h2>
+            <div class="section-content">
+                <p>Suirodoku.com uses cookies and similar technologies to enhance your gaming experience and analyze platform usage.</p>
+                
+                <p><strong>Types of Cookies We Use:</strong></p>
+                <p>• Essential cookies: Required for the platform to function properly<br>
+                • Analytics cookies: Help us understand how you use our platform<br>
+                • Preference cookies: Remember your settings and preferences</p>
+                
+                <p>You can control cookie settings through your browser preferences, though disabling certain cookies may affect platform functionality.</p>
+            </div>
+        </div>
+
+        <div class="contact-info">
+            <h3 class="contact-title">Contact Us</h3>
+            <p class="section-content">If you have any questions about these legal terms, our privacy practices, or need support, please contact us:</p>
+            <p><strong>Email:</strong> <a href="mailto:contact@suirodoku.com" class="contact-email">contact@suirodoku.com</a></p>
+            <p class="section-content" style="margin-top: 16px; font-size: 14px; color: #B3B3B3;">
+                Last updated: December 2024
+            </p>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-bottom">
+                <div class="footer-copyright">
+                    © 2024 Suirodoku.com. All rights reserved.
+                </div>
+                <div class="footer-legal">
+                    <a onclick="navigateTo('legal')">Privacy Policy</a>
+                    <a onclick="navigateTo('legal')">Terms of Service</a>
+                    <a onclick="navigateTo('legal')">Contact</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Navigation functions
+        function goToHome() {
+            window.location.href = '../';
+        }
+
+        function navigateTo(page) {
+            switch(page) {
+                case 'tutorial':
+                    window.location.href = '../tutorial/';
+                    break;
+                case 'leaderboard':
+                    window.location.href = '../leaderboard/';
+                    break;
+                case 'auth':
+                    window.location.href = '../auth/';
+                    break;
+                case 'profile':
+                    window.location.href = '../profile/';
+                    break;
+                case 'legal':
+                    // Already on legal page, just scroll to top
+                    window.scrollTo(0, 0);
+                    break;
+                default:
+                    window.location.href = '../';
+            }
+        }
+
+        // Dynamic header auth state (same as your main page)
+        function updateHeaderAuthState(user) {
+            const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
+            
+            if (user) {
+                desktopAuthButtons.innerHTML = `
+                    <button class="auth-btn profile-btn" onclick="navigateTo('profile')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                        </svg>
+                        Profile
+                    </button>
+                `;
+            } else {
+                desktopAuthButtons.innerHTML = `
+                    <button class="auth-btn login-btn" onclick="navigateTo('auth')">Log In</button>
+                `;
+            }
+        }
+
+        // Initialize auth state
+        document.addEventListener('DOMContentLoaded', function() {
+            updateHeaderAuthState(null);
+        });
+    </script>
+</body>
+</html>

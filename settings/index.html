@@ -937,6 +937,7 @@
                 }
             },
 
+            // ✅ CONFIRMÉ: Aucune référence à gameStats ici - utilise seulement improvedStats via script.js
             createDefaultProfile: function(user) {
                 return {
                     displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',

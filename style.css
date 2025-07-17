@@ -1,3 +1,5 @@
+/* ============= STYLE.CSS REFACTORISÉ ET OPTIMISÉ ============= */
+
 /* ============= RESET ET BASE ============= */
 * {
     margin: 0;
@@ -65,11 +67,6 @@ body {
     transform: translateX(40px);
 }
 
-.nav-item {
-    position: relative;
-    display: inline-block;
-}
-
 .nav-btn {
     background: transparent;
     border: 2px solid #e2e8f0;
@@ -87,77 +84,6 @@ body {
     background-color: #f7fafc;
     border-color: #cbd5e0;
     color: #2d3748;
-}
-
-.nav-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-color: transparent;
-}
-
-.nav-arrow {
-    transition: transform 0.3s ease;
-    font-size: 12px;
-}
-
-.nav-item:hover .nav-arrow {
-    transform: rotate(180deg);
-}
-
-/* Dropdown Menu */
-.dropdown-menu {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-    border: 1px solid #e5e7eb;
-    min-width: 200px;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-10px);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 1000;
-    overflow: hidden;
-}
-
-.nav-item:hover .dropdown-menu {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.dropdown-item {
-    display: block;
-    padding: 12px 20px;
-    color: #374151;
-    text-decoration: none;
-    font-size: 15px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    border: none;
-    background: none;
-    width: 100%;
-    text-align: left;
-    cursor: pointer;
-}
-
-.dropdown-item:hover {
-    background-color: #f3f4f6;
-    color: #1f2937;
-}
-
-.dropdown-item:first-child {
-    border-radius: 12px 12px 0 0;
-}
-
-.dropdown-item:last-child {
-    border-radius: 0 0 12px 12px;
-}
-
-.dropdown-item:only-child {
-    border-radius: 12px;
 }
 
 /* Auth Buttons */
@@ -200,32 +126,6 @@ body {
     background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-
-.menu-button {
-    width: 24px;
-    height: 18px;
-    display: none !important; /* Suppression totale - pas besoin sur desktop ni mobile */
-    flex-direction: column;
-    justify-content: space-between;
-    cursor: pointer;
-    transition: transform 0.2s ease;
-}
-
-.menu-button:hover {
-    transform: scale(1.1);
-}
-
-.menu-line {
-    width: 100%;
-    height: 2px;
-    background-color: #4a5568;
-    border-radius: 1px;
-    transition: all 0.3s ease;
-}
-
-.menu-button:hover .menu-line {
-    background-color: #2d3748;
 }
 
 /* ============= MOBILE HAMBURGER MENU ============= */
@@ -390,50 +290,7 @@ body {
     background-color: #e9ecef;
 }
 
-.mobile-auth-buttons {
-    padding: 20px;
-    border-top: 1px solid #e5e5ea;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.mobile-auth-btn {
-    padding: 14px 20px;
-    border-radius: 12px;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    border: none;
-    text-decoration: none;
-    text-align: center;
-}
-
-.mobile-login-btn {
-    background: transparent;
-    color: #4a5568;
-    border: 2px solid #e2e8f0;
-}
-
-.mobile-login-btn:hover {
-    background-color: #f7fafc;
-    border-color: #cbd5e0;
-}
-
-.mobile-signup-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: 2px solid transparent;
-}
-
-.mobile-signup-btn:hover {
-    background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-
-/* ============= MODALES EXISTANTES ============= */
+/* ============= MODALES ET NOTIFICATIONS ============= */
 
 /* Error Modal */
 .error-modal {
@@ -521,7 +378,7 @@ body {
     font-weight: 500;
 }
 
-/* Difficulty Modal */
+/* Modal Overlay Base */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -540,6 +397,7 @@ body {
     display: flex;
 }
 
+/* Difficulty Modal */
 .difficulty-modal {
     background-color: #fff;
     border-radius: 20px;
@@ -768,7 +626,7 @@ body {
     transform: scale(0.95);
 }
 
-/* ⚡ NOUVEAUX MODALS - DÉFAITE ============= */
+/* Defeat Modal */
 .defeat-modal {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9));
     backdrop-filter: blur(20px);
@@ -919,7 +777,7 @@ body {
     transform: scale(0.95);
 }
 
-/* ⚡ NOUVEAUX MODALS - MODE SÉLECTION AMÉLIORÉ ============= */
+/* Mode Selection Modal */
 .mode-selection-modal {
     position: fixed;
     top: 0;
@@ -1021,6 +879,43 @@ body {
     line-height: 1.4;
 }
 
+/* Notifications Toast */
+.stats-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #007aff;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    z-index: 10000;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,122,255,0.3);
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
 /* ============= GAME INFO ============= */
 .game-info {
     display: flex;
@@ -1042,7 +937,6 @@ body {
     gap: 0;
 }
 
-/* DESKTOP: Layout par défaut */
 .game-stats {
     display: flex;
     align-items: center;
@@ -1111,20 +1005,6 @@ body {
     gap: 8px;
 }
 
-.pause-btn {
-    background: none;
-    border: none;
-    font-size: 18px;
-    cursor: pointer;
-    color: #333333;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-}
-
 .solve-btn {
     background: linear-gradient(135deg, #ff9500, #e6850e);
     border: none;
@@ -1156,111 +1036,49 @@ body {
     box-shadow: none;
 }
 
-/* Number Grid */
-.number-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
+/* Boutons spécifiques */
+#reveal-btn {
+    background: linear-gradient(135deg, #28a745, #20c997) !important;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
 }
 
-.number-btn {
-    aspect-ratio: 1;
-    background-color: #d6dae8;
-    border: 1px solid #b8bcc8;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px !important;
-    font-weight: 400;
-    cursor: pointer;
-    transition: all 0.1s ease;
-    color: #1c1c1e;
-    min-height: 47px;
+#reveal-btn:hover {
+    background: linear-gradient(135deg, #20c997, #17a2b8) !important;
+    box-shadow: 0 6px 16px rgba(32, 201, 151, 0.4) !important;
 }
 
-.number-btn:hover {
-    background-color: #c8cde0;
+#new-game-btn {
+    background: linear-gradient(135deg, #1e40af, #3b82f6) !important;
+    color: white !important;
+    font-weight: 600;
+    margin-left: 8px;
+    box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3) !important;
 }
 
-.number-btn:active {
-    transform: scale(0.95);
+#new-game-btn:hover {
+    background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
+    box-shadow: 0 6px 16px rgba(29, 78, 216, 0.4) !important;
 }
 
-.number-btn:disabled {
-    background-color: #f5f5f5;
-    color: #999;
-    cursor: not-allowed;
-    opacity: 0.5;
+.correct-btn {
+    background: linear-gradient(135deg, #ff3b30, #d70015) !important;
+    color: white !important;
+    font-weight: 700;
+    animation: correctPulse 2s infinite;
+    box-shadow: 0 4px 12px rgba(255, 59, 48, 0.2) !important;
 }
 
-.number-btn.notes-mode {
-    background-color: #007aff;
-    color: #fff;
-    border-color: #007aff;
+.correct-btn:hover {
+    background: linear-gradient(135deg, #d70015, #b50012) !important;
+    box-shadow: 0 6px 16px rgba(215, 0, 21, 0.3) !important;
 }
 
-.number-btn.notes-mode:hover {
-    background-color: #0056b3;
+@keyframes correctPulse {
+    0%, 100% { box-shadow: 0 4px 12px rgba(255, 59, 48, 0.2); }
+    50% { box-shadow: 0 0 20px rgba(255, 59, 48, 0.8); }
 }
 
-.number-btn.notes-mode:active {
-    transform: scale(0.95);
-    background-color: #004494;
-}
-
-/* Color Grid */
-.color-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2px;
-}
-
-.color-btn {
-    aspect-ratio: 1;
-    border: 1px solid #b8bcc8;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.1s ease;
-    min-height: 47px;
-}
-
-.color-btn:hover {
-    transform: scale(1.05);
-    border-color: #8e8e93;
-}
-
-.color-btn:active {
-    transform: scale(0.95);
-}
-
-.color-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-    pointer-events: none;
-}
-
-.color-btn.notes-mode {
-    border: 2px solid #007aff;
-    box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.3);
-}
-
-.color-btn.notes-mode:hover {
-    border-color: #0056b3;
-    box-shadow: 0 0 0 2px rgba(0, 86, 179, 0.4);
-}
-
-.color-yellow { background-color: #FFEB6A; }
-.color-orange { background-color: #FFBB45; }
-.color-red { background-color: #FF8A7A; }
-.color-green { background-color: #5BD87A; }
-.color-brown { background-color: #C9A387; }
-.color-pink { background-color: #FFA8CB; }
-.color-cyan { background-color: #64EAE6; }
-.color-blue { background-color: #5DB2FF; }
-.color-purple { background-color: #BEA1E5; }
-
-/* Animation pour le bouton indice */
+/* Hint animation */
 .hint-icon {
     display: inline-block;
     transition: transform 0.3s ease;
@@ -1285,762 +1103,6 @@ body {
         filter: brightness(1.3);
         text-shadow: 0 0 15px rgba(255, 193, 7, 0.8);
     }
-}
-
-/* ============= NOTES SYSTEM ============= */
-.cell-notes {
-    position: absolute;
-    inset: 2px;
-    display: grid;
-    grid-template-rows: repeat(4, 1fr);
-    gap: 0px;
-    pointer-events: none;
-    transform: translateX(-1.5px);
-}
-
-.notes-row {
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    gap: 1px;
-    height: 100%;
-}
-
-.note-item {
-    width: 7px;
-    height: 7px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 1px;
-    flex-shrink: 0;
-}
-
-.note-number {
-    font-size: 10px;
-    font-weight: 700;
-    color: #333;
-    text-shadow: 0 0 2px rgba(255,255,255,0.8);
-    line-height: 1;
-}
-
-.note-color {
-    border-radius: 50%;
-    border: 0.5px solid rgba(0,0,0,0.4);
-}
-
-.note-color.color-J { background-color: #FFEB6A; }
-.note-color.color-O { background-color: #FFBB45; }
-.note-color.color-R { background-color: #FF8A7A; }
-.note-color.color-G { background-color: #5BD87A; }
-.note-color.color-P { background-color: #C9A387; }
-.note-color.color-M { background-color: #FFA8CB; }
-.note-color.color-T { background-color: #64EAE6; }
-.note-color.color-B { background-color: #5DB2FF; }
-.note-color.color-V { background-color: #BEA1E5; }
-
-/* ============= BOTTOM CONTROLS (MOBILE) ============= */
-.bottom-controls {
-    display: none;
-    background-color: #f2f2f7;
-    padding: 16px;
-    margin-top: 24px;
-}
-
-.bottom-row {
-    display: flex;
-    gap: 16px;
-    justify-content: center;
-    max-width: 100%;
-}
-
-.bottom-controls .control-section {
-    flex: 1;
-    max-width: 180px;
-    background-color: transparent;
-}
-
-.bottom-controls .number-grid,
-.bottom-controls .color-grid {
-    gap: 6px;
-}
-
-.bottom-controls .number-btn,
-.bottom-controls .color-btn {
-    min-height: 36px;
-    font-size: 16px;
-}
-
-/* ============= FOOTER ============= */
-.footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background: #4a5568;
-    color: white;
-    transform: translateY(calc(100% - 8px));
-    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 100;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
-}
-
-.footer:hover {
-    transform: translateY(0);
-}
-
-.footer-tab {
-    height: 8px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    cursor: pointer;
-    position: relative;
-}
-
-.footer-tab::after {
-    content: '⌃';
-    position: absolute;
-    top: -12px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: #4a5568;
-    font-size: 12px;
-    opacity: 0.6;
-    transition: opacity 0.3s ease;
-}
-
-.footer:hover .footer-tab::after {
-    opacity: 0;
-}
-
-.footer-content {
-    padding: 20px 24px;
-}
-
-.footer-bottom {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.footer-legal {
-    display: flex;
-    gap: 20px;
-}
-
-.footer-legal a {
-    color: rgba(255, 255, 255, 0.8);
-    text-decoration: none;
-    transition: color 0.3s ease;
-    cursor: pointer;
-}
-
-.footer-legal a:hover {
-    color: #ffffff;
-}
-
-/* Adjust main content to prevent overlap */
-.main-content {
-    min-height: calc(100vh - 20px);
-    padding-bottom: 20px;
-}
-
-/* ============= RESPONSIVE DESIGN ============= */
-@media (max-width: 1024px) {
-    .sudoku-wrapper {
-        width: 380px;
-    }
-    
-    .controls-panel {
-        width: 155px;
-    }
-    
-    .game-container {
-        gap: 20px;
-    }
-}
-
-@media (max-width: 768px) {
-    /* Masquer header et footer sur mobile */
-    .header {
-        display: none;
-    }
-    
-    .footer {
-        display: none;
-    }
-
-    /* Afficher le bouton hamburger mobile */
-    .mobile-hamburger {
-        display: flex;
-        position: static;
-        margin-left: 8px;
-        margin-top: 0;
-        width: 40px;
-        height: 40px;
-        top: auto;
-        right: auto;
-        order: 1; /* Mettre à gauche */
-    }
-
-    /* Ajuster le main content sans header/footer */
-    .main-content {
-        min-height: 100vh;
-        padding-bottom: 0;
-        padding-top: 20px; /* Ajouter de l'espace en haut */
-    }
-
-    /* NOUVELLE disposition de la game-info MOBILE */
-    .game-info {
-        margin: 0 auto 20px auto; /* Plus d'espace en bas */
-        border-radius: 12px;
-        padding: 12px 16px;
-        position: relative;
-    }
-
-    .game-info-content {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-
-    /* MOBILE: Réorganiser l'ordre */
-    .game-stats {
-        order: 2; /* Stats au centre */
-        flex: 1;
-        justify-content: center;
-        gap: 0;
-    }
-
-    .pause-container {
-        order: 1; /* Boutons à gauche */
-        padding-left: 0;
-        margin-left: 0;
-        border-left: none;
-        gap: 8px;
-    }
-
-    /* Ordre des boutons dans pause-container MOBILE */
-    .mobile-hamburger {
-        order: 1; /* Hamburger en premier */
-        display: flex;
-        position: static;
-        margin-left: 0;
-        margin-top: 0;
-        width: 40px;
-        height: 40px;
-        top: auto;
-        right: auto;
-    }
-
-    #correct-btn {
-        order: 2; /* Correct en deuxième quand visible */
-        margin-left: 0;
-        padding: 6px 10px;
-        font-size: 11px;
-    }
-
-    #new-game-btn {
-        order: 2; /* New Game en deuxième quand Correct caché */
-        margin-left: 0;
-        padding: 6px 10px;
-        font-size: 11px;
-    }
-
-    #reveal-btn {
-        display: none !important; /* Masquer Complete sur mobile */
-    }
-
-    /* Masquer le séparateur vertical sur mobile */
-    .pause-container div[style*="width: 1px"] {
-        display: none;
-    }
-
-    /* Optimiser les espacements sur mobile */
-    .info-item {
-        width: 50px;
-        text-align: center;
-    }
-
-    .info-item:not(:last-child) {
-        border-right: 0.5px solid #e5e5ea;
-        padding-right: 8px;
-        margin-right: 8px;
-    }
-
-    /* Supprimer les bordures left qui ne servent plus */
-    .info-item {
-        border-left: none !important;
-        padding-left: 0 !important;
-        margin-left: 0 !important;
-    }
-
-    /* Cacher la section level sur mobile */
-    .info-item:nth-child(2) {
-        display: none;
-    }
-
-    /* Masquer le bouton complete sur mobile */
-    #reveal-btn {
-        display: none !important;
-    }
-
-    /* Masquer le séparateur vertical */
-    .pause-container div[style*="width: 1px"] {
-        display: none;
-    }
-
-    .game-container {
-        flex-direction: column;
-        align-items: center;
-        padding: 0 16px;
-        margin: 0 auto;
-        margin-top: 0; /* Supprimer la marge top */
-    }
-
-    .controls-panel {
-        display: none;
-    }
-
-    .bottom-controls {
-        display: block;
-        margin-top: 20px; /* Réduire l'espace au dessus */
-    }
-
-    .sudoku-wrapper {
-        width: min(85vw, 420px);
-        margin-top: 0; /* Supprimer toute marge top */
-    }
-
-    .sudoku-cell {
-        font-size: 22px;
-    }
-
-    .solve-btn {
-        margin-left: 0;
-        padding: 6px 10px;
-        font-size: 11px;
-    }
-
-    /* ⚡ RESPONSIVE POUR LES NOUVEAUX MODALS */
-    .difficulty-modal,
-    .victory-modal,
-    .defeat-modal,
-    .mode-modal-content {
-        padding: 24px;
-        margin: 16px;
-    }
-
-    .modal-title,
-    .victory-title,
-    .defeat-title,
-    .mode-modal-title {
-        font-size: 20px;
-    }
-
-    .modal-subtitle,
-    .victory-subtitle,
-    .defeat-subtitle,
-    .mode-modal-subtitle {
-        font-size: 14px;
-        margin-bottom: 24px;
-    }
-
-    .difficulty-option {
-        padding: 12px 16px;
-    }
-
-    .difficulty-name {
-        font-size: 16px;
-    }
-
-    .difficulty-details {
-        font-size: 13px;
-    }
-
-    .difficulty-stats {
-        font-size: 11px;
-    }
-
-    .mode-options {
-        flex-direction: column;
-    }
-
-    .mode-option {
-        padding: 20px 16px;
-    }
-
-    .victory-stats,
-    .defeat-stats {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-
-    .victory-buttons,
-    .defeat-buttons {
-        flex-direction: column;
-    }
-
-    .victory-btn,
-    .defeat-btn {
-        min-width: auto;
-    }
-}
-
-@media (max-width: 480px) {
-    .main-content {
-        padding-top: 4px; /* Encore moins d'espace en haut */
-    }
-
-    .mobile-hamburger {
-        width: 32px; /* Plus petit */
-        height: 32px;
-        margin-left: 0; /* Pas de marge gauche pour être le plus à gauche possible */
-        margin-right: 6px; /* Petit espace après le hamburger */
-    }
-
-    .game-info {
-        margin-bottom: 6px; /* Réduire encore de 8px à 6px */
-        padding: 8px 12px; /* Padding plus serré */
-    }
-
-    .info-item {
-        width: 42px; /* Plus compact */
-    }
-
-    .info-label {
-        font-size: 10px; /* Encore plus petit */
-        margin-bottom: 1px;
-    }
-
-    .info-value {
-        font-size: 13px; /* Plus compact */
-    }
-
-    .solve-btn {
-        padding: 4px 6px; /* Boutons plus petits */
-        font-size: 9px;
-    }
-
-    .sudoku-wrapper {
-        width: min(92vw, 340px); /* Prendre plus d'espace horizontal */
-    }
-
-    .bottom-row {
-        gap: 6px; /* Réduire encore de 8px à 6px */
-    }
-
-    .bottom-controls .control-section {
-        max-width: none;
-        flex: 1;
-    }
-
-    .sudoku-cell {
-        font-size: 18px; /* Plus petit pour tenir */
-    }
-
-    .bottom-controls {
-        padding: 6px; /* Padding encore plus réduit de 8px à 6px */
-        margin-top: 6px; /* Remonter encore plus de 8px à 6px */
-    }
-
-    .bottom-controls .number-btn,
-    .bottom-controls .color-btn {
-        min-height: 28px; /* Plus compact */
-        font-size: 16px !important; /* Agrandir les chiffres de 13px à 16px */
-        font-weight: 700; /* Poids pour la visibilité */
-    }
-
-    .bottom-controls .number-grid,
-    .bottom-controls .color-grid {
-        gap: 2px; /* Espace minimal réduit de 3px à 2px */
-    }
-
-    .game-info-content {
-        gap: 4px; /* Réduire l'espace */
-    }
-
-    .pause-container {
-        gap: 4px; /* Moins d'espace entre hamburger et bouton */
-    }
-
-    /* ⚡ RESPONSIVE ULTRA MOBILE POUR LES NOUVEAUX MODALS */
-    .difficulty-modal,
-    .victory-modal,
-    .defeat-modal,
-    .mode-modal-content {
-        padding: 16px; /* Plus compact */
-        margin: 8px;
-    }
-
-    .difficulty-stats {
-        flex-direction: column;
-        gap: 1px; /* Minimal */
-        text-align: center;
-        font-size: 9px; /* Très petit */
-    }
-
-    .difficulty-option,
-    .mode-option {
-        padding: 8px 12px; /* Plus serré */
-    }
-
-    .modal-title,
-    .victory-title,
-    .defeat-title,
-    .mode-modal-title {
-        font-size: 16px;
-    }
-
-    .modal-subtitle,
-    .victory-subtitle,
-    .defeat-subtitle,
-    .mode-modal-subtitle {
-        font-size: 12px;
-        margin-bottom: 16px;
-    }
-
-    .defeat-reason {
-        font-size: 14px;
-        padding: 8px 12px;
-        margin-bottom: 16px;
-    }
-
-    .defeat-message {
-        padding: 12px;
-        margin-bottom: 20px;
-    }
-
-    .defeat-message p {
-        font-size: 12px;
-    }
-}
-
-@media (max-width: 360px) {
-    .sudoku-wrapper {
-        width: min(95vw, 320px);
-    }
-
-    .bottom-row {
-        gap: 4px; /* Espace minimal */
-    }
-
-    .bottom-controls {
-        padding: 4px; /* Padding ultra réduit */
-        margin-top: 4px; /* Remonter au maximum */
-    }
-
-    .bottom-controls .number-btn,
-    .bottom-controls .color-btn {
-        min-height: 26px; /* Encore plus compact */
-        font-size: 14px !important; /* Agrandir les chiffres de 12px à 14px */
-        font-weight: 700; /* Poids pour la lisibilité */
-    }
-
-    .bottom-controls .number-grid,
-    .bottom-controls .color-grid {
-        gap: 1px; /* Espace ultra minimal */
-    }
-
-    .game-info {
-        margin-bottom: 4px; /* Espace minimal */
-        padding: 6px 10px; /* Ultra compact */
-    }
-
-    .info-item {
-        width: 38px; /* Très compact */
-    }
-
-    .info-label {
-        font-size: 9px; /* Très petit */
-    }
-
-    .info-value {
-        font-size: 12px; /* Compact */
-    }
-
-    .mobile-hamburger {
-        width: 28px; /* Très petit */
-        height: 28px;
-        margin-left: 0; /* Pas de marge gauche pour être le plus à gauche possible */
-        margin-right: 4px; /* Petit espace après le hamburger */
-    }
-
-    .solve-btn {
-        padding: 3px 5px; /* Ultra compact */
-        font-size: 8px; /* Très petit */
-    }
-
-    .sudoku-cell {
-        font-size: 16px; /* Plus petit mais lisible */
-    }
-
-    /* ⚡ RESPONSIVE ULTRA COMPACT POUR LES NOUVEAUX MODALS */
-    .defeat-icon {
-        font-size: 48px;
-        margin-bottom: 12px;
-    }
-
-    .victory-icon {
-        font-size: 56px;
-        margin-bottom: 12px;
-    }
-
-    .defeat-message {
-        padding: 8px;
-        margin-bottom: 16px;
-    }
-}
-
-/* ============= AMÉLIORATION MOBILE - CHIFFRES PLUS GROS ============= */
-
-@media (max-width: 768px) {
-    .bottom-controls .number-btn {
-        min-height: 44px;
-        font-size: 28px !important;
-        font-weight: 400;
-        line-height: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .bottom-controls .color-btn {
-        min-height: 44px;
-    }
-}
-
-@media (max-width: 480px) {
-    .bottom-controls .number-btn {
-        min-height: 40px;
-        font-size: 26px !important;
-        font-weight: 400;
-    }
-    
-    .bottom-controls .color-btn {
-        min-height: 40px;
-    }
-}
-
-@media (max-width: 360px) {
-    .bottom-controls .number-btn {
-        min-height: 36px;
-        font-size: 24px !important;
-        font-weight: 400;
-    }
-    
-    .bottom-controls .color-btn {
-        min-height: 36px;
-    }
-}
-
-/* ============= RÉÉQUILIBRAGE PLUS FORT : ENCORE PLUS À DROITE ============= */
-
-@media (max-width: 768px) {
-    .game-info-content {
-        justify-content: space-between;
-        width: 100%;
-    }
-    
-    .pause-container {
-        margin-left: 8px; /* Hamburger et New Game plus à droite */
-        gap: 8px;
-    }
-    
-    .mobile-hamburger {
-        margin-left: 4px; /* Hamburger plus à droite */
-    }
-    
-    #new-game-btn, #correct-btn {
-        margin-left: 2px; /* New Game aussi plus à droite */
-    }
-    
-    /* Garder les stats et hint comme avant (parfait) */
-    .game-stats {
-        margin-left: auto;
-        margin-right: -24px;
-        gap: 4px;
-    }
-    
-    .info-item:last-child {
-        margin-right: -12px;
-    }
-}
-
-@media (max-width: 480px) {
-    .pause-container {
-        margin-left: 6px; /* Plus à droite */
-    }
-    
-    .mobile-hamburger {
-        margin-left: 2px;
-    }
-    
-    #new-game-btn, #correct-btn {
-        margin-left: 1px;
-    }
-    
-    /* Stats restent parfaites */
-    .game-stats {
-        margin-right: -28px;
-    }
-    
-    .info-item:last-child {
-        margin-right: -16px;
-    }
-}
-}
-
-#reveal-btn {
-    background: linear-gradient(135deg, #28a745, #20c997) !important;
-    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
-}
-
-#reveal-btn:hover {
-    background: linear-gradient(135deg, #20c997, #17a2b8) !important;
-    box-shadow: 0 6px 16px rgba(32, 201, 151, 0.4) !important;
-}
-
-#reveal-btn:active {
-    transform: scale(0.95);
-}
-
-#new-game-btn {
-    background: linear-gradient(135deg, #1e40af, #3b82f6) !important;
-    color: white !important;
-    font-weight: 600;
-    margin-left: 8px;
-    box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3) !important;
-}
-
-#new-game-btn:hover {
-    background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
-    box-shadow: 0 6px 16px rgba(29, 78, 216, 0.4) !important;
-}
-
-#new-game-btn:active {
-    transform: scale(0.95);
-}
-
-.correct-btn {
-    background: linear-gradient(135deg, #ff3b30, #d70015) !important;
-    color: white !important;
-    font-weight: 700;
-    animation: correctPulse 2s infinite;
-    box-shadow: 0 4px 12px rgba(255, 59, 48, 0.2) !important;
-}
-
-.correct-btn:hover {
-    background: linear-gradient(135deg, #d70015, #b50012) !important;
-    box-shadow: 0 6px 16px rgba(215, 0, 21, 0.3) !important;
-}
-
-@keyframes correctPulse {
-    0%, 100% { box-shadow: 0 4px 12px rgba(255, 59, 48, 0.2); }
-    50% { box-shadow: 0 0 20px rgba(255, 59, 48, 0.8); }
 }
 
 /* ============= MAIN GAME CONTAINER ============= */
@@ -2247,3 +1309,800 @@ body {
     opacity: 0.5;
     transform: none;
     box-shadow: none;
+}
+
+/* Number Grid */
+.number-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+}
+
+.number-btn {
+    aspect-ratio: 1;
+    background-color: #d6dae8;
+    border: 1px solid #b8bcc8;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px !important;
+    font-weight: 400;
+    cursor: pointer;
+    transition: all 0.1s ease;
+    color: #1c1c1e;
+    min-height: 47px;
+}
+
+.number-btn:hover {
+    background-color: #c8cde0;
+}
+
+.number-btn:active {
+    transform: scale(0.95);
+}
+
+.number-btn:disabled {
+    background-color: #f5f5f5;
+    color: #999;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.number-btn.notes-mode {
+    background-color: #007aff;
+    color: #fff;
+    border-color: #007aff;
+}
+
+.number-btn.notes-mode:hover {
+    background-color: #0056b3;
+}
+
+.number-btn.notes-mode:active {
+    transform: scale(0.95);
+    background-color: #004494;
+}
+
+/* Color Grid */
+.color-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+}
+
+.color-btn {
+    aspect-ratio: 1;
+    border: 1px solid #b8bcc8;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.1s ease;
+    min-height: 47px;
+}
+
+.color-btn:hover {
+    transform: scale(1.05);
+    border-color: #8e8e93;
+}
+
+.color-btn:active {
+    transform: scale(0.95);
+}
+
+.color-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.color-btn.notes-mode {
+    border: 2px solid #007aff;
+    box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.3);
+}
+
+.color-btn.notes-mode:hover {
+    border-color: #0056b3;
+    box-shadow: 0 0 0 2px rgba(0, 86, 179, 0.4);
+}
+
+/* Color Classes */
+.color-yellow { background-color: #FFEB6A; }
+.color-orange { background-color: #FFBB45; }
+.color-red { background-color: #FF8A7A; }
+.color-green { background-color: #5BD87A; }
+.color-brown { background-color: #C9A387; }
+.color-pink { background-color: #FFA8CB; }
+.color-cyan { background-color: #64EAE6; }
+.color-blue { background-color: #5DB2FF; }
+.color-purple { background-color: #BEA1E5; }
+
+/* ============= NOTES SYSTEM ============= */
+.cell-notes {
+    position: absolute;
+    inset: 2px;
+    display: grid;
+    grid-template-rows: repeat(4, 1fr);
+    gap: 0px;
+    pointer-events: none;
+    transform: translateX(-1.5px);
+}
+
+.notes-row {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 1px;
+    height: 100%;
+}
+
+.note-item {
+    width: 7px;
+    height: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1px;
+    flex-shrink: 0;
+}
+
+.note-number {
+    font-size: 10px;
+    font-weight: 700;
+    color: #333;
+    text-shadow: 0 0 2px rgba(255,255,255,0.8);
+    line-height: 1;
+}
+
+.note-color {
+    border-radius: 50%;
+    border: 0.5px solid rgba(0,0,0,0.4);
+}
+
+.note-color.color-J { background-color: #FFEB6A; }
+.note-color.color-O { background-color: #FFBB45; }
+.note-color.color-R { background-color: #FF8A7A; }
+.note-color.color-G { background-color: #5BD87A; }
+.note-color.color-P { background-color: #C9A387; }
+.note-color.color-M { background-color: #FFA8CB; }
+.note-color.color-T { background-color: #64EAE6; }
+.note-color.color-B { background-color: #5DB2FF; }
+.note-color.color-V { background-color: #BEA1E5; }
+
+/* ============= BOTTOM CONTROLS (MOBILE) ============= */
+.bottom-controls {
+    display: none;
+    background-color: #f2f2f7;
+    padding: 16px;
+    margin-top: 24px;
+}
+
+.bottom-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    max-width: 100%;
+}
+
+.bottom-controls .control-section {
+    flex: 1;
+    max-width: 180px;
+    background-color: transparent;
+}
+
+.bottom-controls .number-grid,
+.bottom-controls .color-grid {
+    gap: 6px;
+}
+
+.bottom-controls .number-btn,
+.bottom-controls .color-btn {
+    min-height: 36px;
+    font-size: 16px;
+}
+
+/* ============= FOOTER ============= */
+.footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #4a5568;
+    color: white;
+    transform: translateY(calc(100% - 8px));
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.footer:hover {
+    transform: translateY(0);
+}
+
+.footer-tab {
+    height: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    cursor: pointer;
+    position: relative;
+}
+
+.footer-tab::after {
+    content: '⌃';
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #4a5568;
+    font-size: 12px;
+    opacity: 0.6;
+    transition: opacity 0.3s ease;
+}
+
+.footer:hover .footer-tab::after {
+    opacity: 0;
+}
+
+.footer-content {
+    padding: 20px 24px;
+}
+
+.footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.footer-legal {
+    display: flex;
+    gap: 20px;
+}
+
+.footer-legal a {
+    color: rgba(255, 255, 255, 0.8);
+    text-decoration: none;
+    transition: color 0.3s ease;
+    cursor: pointer;
+}
+
+.footer-legal a:hover {
+    color: #ffffff;
+}
+
+.main-content {
+    min-height: calc(100vh - 20px);
+    padding-bottom: 20px;
+}
+
+/* ============= RESPONSIVE DESIGN ============= */
+@media (max-width: 1024px) {
+    .sudoku-wrapper {
+        width: 380px;
+    }
+    
+    .controls-panel {
+        width: 155px;
+    }
+    
+    .game-container {
+        gap: 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    /* Masquer header et footer sur mobile */
+    .header {
+        display: none;
+    }
+    
+    .footer {
+        display: none;
+    }
+
+    /* Afficher le bouton hamburger mobile */
+    .mobile-hamburger {
+        display: flex;
+        position: static;
+        margin-left: 8px;
+        margin-top: 0;
+        width: 40px;
+        height: 40px;
+        top: auto;
+        right: auto;
+        order: 1;
+    }
+
+    /* Ajuster le main content sans header/footer */
+    .main-content {
+        min-height: 100vh;
+        padding-bottom: 0;
+        padding-top: 20px;
+    }
+
+    /* NOUVELLE disposition de la game-info MOBILE */
+    .game-info {
+        margin: 0 auto 20px auto;
+        border-radius: 12px;
+        padding: 12px 16px;
+        position: relative;
+    }
+
+    .game-info-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    /* MOBILE: Réorganiser l'ordre */
+    .game-stats {
+        order: 2;
+        flex: 1;
+        justify-content: center;
+        gap: 0;
+    }
+
+    .pause-container {
+        order: 1;
+        padding-left: 0;
+        margin-left: 0;
+        border-left: none;
+        gap: 8px;
+    }
+
+    /* Ordre des boutons dans pause-container MOBILE */
+    .mobile-hamburger {
+        order: 1;
+        display: flex;
+        position: static;
+        margin-left: 0;
+        margin-top: 0;
+        width: 40px;
+        height: 40px;
+        top: auto;
+        right: auto;
+    }
+
+    #correct-btn {
+        order: 2;
+        margin-left: 0;
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+
+    #new-game-btn {
+        order: 2;
+        margin-left: 0;
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+
+    #reveal-btn {
+        display: none !important;
+    }
+
+    /* Masquer le séparateur vertical sur mobile */
+    .pause-container div[style*="width: 1px"] {
+        display: none;
+    }
+
+    /* Optimiser les espacements sur mobile */
+    .info-item {
+        width: 50px;
+        text-align: center;
+    }
+
+    .info-item:not(:last-child) {
+        border-right: 0.5px solid #e5e5ea;
+        padding-right: 8px;
+        margin-right: 8px;
+    }
+
+    /* Supprimer les bordures left qui ne servent plus */
+    .info-item {
+        border-left: none !important;
+        padding-left: 0 !important;
+        margin-left: 0 !important;
+    }
+
+    /* Cacher la section level sur mobile */
+    .info-item:nth-child(2) {
+        display: none;
+    }
+
+    .game-container {
+        flex-direction: column;
+        align-items: center;
+        padding: 0 16px;
+        margin: 0 auto;
+        margin-top: 0;
+    }
+
+    .controls-panel {
+        display: none;
+    }
+
+    .bottom-controls {
+        display: block;
+        margin-top: 20px;
+    }
+
+    .sudoku-wrapper {
+        width: min(85vw, 420px);
+        margin-top: 0;
+    }
+
+    .sudoku-cell {
+        font-size: 22px;
+    }
+
+    .solve-btn {
+        margin-left: 0;
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+
+    /* Responsive pour les modals */
+    .difficulty-modal,
+    .victory-modal,
+    .defeat-modal,
+    .mode-modal-content {
+        padding: 24px;
+        margin: 16px;
+    }
+
+    .modal-title,
+    .victory-title,
+    .defeat-title,
+    .mode-modal-title {
+        font-size: 20px;
+    }
+
+    .modal-subtitle,
+    .victory-subtitle,
+    .defeat-subtitle,
+    .mode-modal-subtitle {
+        font-size: 14px;
+        margin-bottom: 24px;
+    }
+
+    .difficulty-option {
+        padding: 12px 16px;
+    }
+
+    .difficulty-name {
+        font-size: 16px;
+    }
+
+    .difficulty-details {
+        font-size: 13px;
+    }
+
+    .difficulty-stats {
+        font-size: 11px;
+    }
+
+    .mode-options {
+        flex-direction: column;
+    }
+
+    .mode-option {
+        padding: 20px 16px;
+    }
+
+    .victory-stats,
+    .defeat-stats {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .victory-buttons,
+    .defeat-buttons {
+        flex-direction: column;
+    }
+
+    .victory-btn,
+    .defeat-btn {
+        min-width: auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-content {
+        padding-top: 4px;
+    }
+
+    .mobile-hamburger {
+        width: 32px;
+        height: 32px;
+        margin-left: 0;
+        margin-right: 6px;
+    }
+
+    .game-info {
+        margin-bottom: 6px;
+        padding: 8px 12px;
+    }
+
+    .info-item {
+        width: 42px;
+    }
+
+    .info-label {
+        font-size: 10px;
+        margin-bottom: 1px;
+    }
+
+    .info-value {
+        font-size: 13px;
+    }
+
+    .solve-btn {
+        padding: 4px 6px;
+        font-size: 9px;
+    }
+
+    .sudoku-wrapper {
+        width: min(92vw, 340px);
+    }
+
+    .bottom-row {
+        gap: 6px;
+    }
+
+    .bottom-controls .control-section {
+        max-width: none;
+        flex: 1;
+    }
+
+    .sudoku-cell {
+        font-size: 18px;
+    }
+
+    .bottom-controls {
+        padding: 6px;
+        margin-top: 6px;
+    }
+
+    .bottom-controls .number-btn,
+    .bottom-controls .color-btn {
+        min-height: 28px;
+        font-size: 16px !important;
+        font-weight: 700;
+    }
+
+    .bottom-controls .number-grid,
+    .bottom-controls .color-grid {
+        gap: 2px;
+    }
+
+    .game-info-content {
+        gap: 4px;
+    }
+
+    .pause-container {
+        gap: 4px;
+    }
+
+    /* Responsive ultra mobile pour les modals */
+    .difficulty-modal,
+    .victory-modal,
+    .defeat-modal,
+    .mode-modal-content {
+        padding: 16px;
+        margin: 8px;
+    }
+
+    .difficulty-stats {
+        flex-direction: column;
+        gap: 1px;
+        text-align: center;
+        font-size: 9px;
+    }
+
+    .difficulty-option,
+    .mode-option {
+        padding: 8px 12px;
+    }
+
+    .modal-title,
+    .victory-title,
+    .defeat-title,
+    .mode-modal-title {
+        font-size: 16px;
+    }
+
+    .modal-subtitle,
+    .victory-subtitle,
+    .defeat-subtitle,
+    .mode-modal-subtitle {
+        font-size: 12px;
+        margin-bottom: 16px;
+    }
+
+    .defeat-reason {
+        font-size: 14px;
+        padding: 8px 12px;
+        margin-bottom: 16px;
+    }
+
+    .defeat-message {
+        padding: 12px;
+        margin-bottom: 20px;
+    }
+
+    .defeat-message p {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 360px) {
+    .sudoku-wrapper {
+        width: min(95vw, 320px);
+    }
+
+    .bottom-row {
+        gap: 4px;
+    }
+
+    .bottom-controls {
+        padding: 4px;
+        margin-top: 4px;
+    }
+
+    .bottom-controls .number-btn,
+    .bottom-controls .color-btn {
+        min-height: 26px;
+        font-size: 14px !important;
+        font-weight: 700;
+    }
+
+    .bottom-controls .number-grid,
+    .bottom-controls .color-grid {
+        gap: 1px;
+    }
+
+    .game-info {
+        margin-bottom: 4px;
+        padding: 6px 10px;
+    }
+
+    .info-item {
+        width: 38px;
+    }
+
+    .info-label {
+        font-size: 9px;
+    }
+
+    .info-value {
+        font-size: 12px;
+    }
+
+    .mobile-hamburger {
+        width: 28px;
+        height: 28px;
+        margin-left: 0;
+        margin-right: 4px;
+    }
+
+    .solve-btn {
+        padding: 3px 5px;
+        font-size: 8px;
+    }
+
+    .sudoku-cell {
+        font-size: 16px;
+    }
+
+    /* Responsive ultra compact pour les modals */
+    .defeat-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+    }
+
+    .victory-icon {
+        font-size: 56px;
+        margin-bottom: 12px;
+    }
+
+    .defeat-message {
+        padding: 8px;
+        margin-bottom: 16px;
+    }
+}
+
+/* ============= AMÉLIORATION MOBILE - CHIFFRES PLUS GROS ============= */
+@media (max-width: 768px) {
+    .bottom-controls .number-btn {
+        min-height: 44px;
+        font-size: 28px !important;
+        font-weight: 400;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .bottom-controls .color-btn {
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 480px) {
+    .bottom-controls .number-btn {
+        min-height: 40px;
+        font-size: 26px !important;
+        font-weight: 400;
+    }
+    
+    .bottom-controls .color-btn {
+        min-height: 40px;
+    }
+}
+
+@media (max-width: 360px) {
+    .bottom-controls .number-btn {
+        min-height: 36px;
+        font-size: 24px !important;
+        font-weight: 400;
+    }
+    
+    .bottom-controls .color-btn {
+        min-height: 36px;
+    }
+}
+
+/* ============= RÉÉQUILIBRAGE MOBILE ============= */
+@media (max-width: 768px) {
+    .game-info-content {
+        justify-content: space-between;
+        width: 100%;
+    }
+    
+    .pause-container {
+        margin-left: 8px;
+        gap: 8px;
+    }
+    
+    .mobile-hamburger {
+        margin-left: 4px;
+    }
+    
+    #new-game-btn, #correct-btn {
+        margin-left: 2px;
+    }
+    
+    .game-stats {
+        margin-left: auto;
+        margin-right: -24px;
+        gap: 4px;
+    }
+    
+    .info-item:last-child {
+        margin-right: -12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .pause-container {
+        margin-left: 6px;
+    }
+    
+    .mobile-hamburger {
+        margin-left: 2px;
+    }
+    
+    #new-game-btn, #correct-btn {
+        margin-left: 1px;
+    }
+    
+    .game-stats {
+        margin-right: -28px;
+    }
+    
+    .info-item:last-child {
+        margin-right: -16px;
+    }
+}

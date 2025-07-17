@@ -1,4 +1,4 @@
-// ============= SCRIPT.JS REFACTORISÉ - MODULAIRE ET OPTIMISÉ =============
+// ============= SCRIPT.JS REFACTORISÉ - MODULAIRE ET OPTIMISÉ AVEC RANKINGS =============
 
 // ============= 1. CONFIGURATION ET ÉTAT GLOBAL =============
 const GAME_CONFIG = {
@@ -44,180 +44,158 @@ const gameState = {
 let gameTimer = null;
 let currentUser = null;
 
-// ============= 2. SYSTÈME DE STATS AMÉLIORÉ (INTÉGRÉ) =============
-class ImprovedStatsManager {
+// ⚡ NOUVEAU : 2. SYSTÈME DE RANKINGS COMPLET =============
+class RankingStatsManager {
     constructor() {
-        this.ratingSystem = new SudokuRatingSystem();
-        this.levelSystem = new PlayerLevelSystem();
+        this.difficultyMultipliers = {
+            'easy': 1,
+            'medium': 1.5,
+            'hard': 2,
+            'expert': 3,
+            'master': 5
+        };
     }
     
     async updateStats(gameData) {
         if (!currentUser) return { success: false, message: 'Not logged in' };
         
         try {
-            const stats = await this.getPlayerStats(currentUser.uid) || this.createDefaultStats();
+            console.log('🔄 Updating ranking stats...', gameData);
             
-            // Mise à jour des stats générales
-            stats.totalGames++;
-            stats.totalPlayTime += gameData.time;
-            
-            // Mise à jour selon le mode
-            if (gameData.gameMode === 'practice') {
-                this.updatePracticeStats(stats, gameData);
+            // ⚡ NOUVEAU : Utiliser la fonction Firebase intégrée pour mettre à jour les stats
+            if (typeof window.updatePlayerStatsOnly === 'function') {
+                await window.updatePlayerStatsOnly(gameData);
+                return this.generateMessage(gameData);
             } else {
-                this.updateRankedStats(stats, gameData);
+                throw new Error('Firebase stats function not available');
             }
-            
-            await this.savePlayerStats(currentUser.uid, stats);
-            return this.generateMessage(stats, gameData);
             
         } catch (error) {
-            console.error('Stats update error:', error);
-            return { success: false, message: 'Error saving stats' };
+            console.error('❌ Ranking stats update error:', error);
+            return { success: false, message: 'Error saving ranking stats' };
         }
     }
     
-    createDefaultStats() {
-        return {
-            totalGames: 0,
-            totalPlayTime: 0,
-            practice: { gamesPlayed: 0, gamesCompleted: 0, totalScore: 0, bestScores: {} },
-            ranked: { gamesPlayed: 0, gamesCompleted: 0, currentRating: 1000, peakRating: 1000, winStreak: 0 }
-        };
-    }
-    
-    updatePracticeStats(stats, gameData) {
-        stats.practice.gamesPlayed++;
-        if (gameData.isCompleted) {
-            stats.practice.gamesCompleted++;
-            stats.practice.totalScore += gameData.finalScore;
-            
-            const currentBest = stats.practice.bestScores[gameData.difficulty] || 0;
-            if (gameData.finalScore > currentBest) {
-                stats.practice.bestScores[gameData.difficulty] = gameData.finalScore;
-            }
-        }
-    }
-    
-    updateRankedStats(stats, gameData) {
-        stats.ranked.gamesPlayed++;
-        
-        if (gameData.isCompleted) {
-            stats.ranked.gamesCompleted++;
-            const ratingChange = this.ratingSystem.calculateRatingChange(stats.ranked.currentRating, gameData);
-            stats.ranked.currentRating = Math.max(100, Math.min(3000, stats.ranked.currentRating + ratingChange));
-            stats.ranked.peakRating = Math.max(stats.ranked.peakRating, stats.ranked.currentRating);
-            stats.ranked.winStreak++;
-        } else {
-            stats.ranked.winStreak = 0;
-            if (gameData.isAbandoned && gameData.time > 60) {
-                stats.ranked.currentRating = Math.max(100, stats.ranked.currentRating - 10);
-            }
-        }
-    }
-    
-    generateMessage(stats, gameData) {
-        const level = this.levelSystem.getLevel(stats.ranked.currentRating);
+    generateMessage(gameData) {
+        const isWin = gameData.isCompleted && gameData.errors <= 3;
+        const rankingPoints = this.calculateRankingPoints(gameData, isWin);
         
         if (gameData.gameMode === 'practice') {
             return {
                 success: true,
                 message: gameData.isCompleted ? 
-                    `Practice completed! Play ranked to improve your rating.` :
-                    `Practice session ended. No penalties in practice mode!`,
-                stats: { practice: stats.practice, level }
+                    `🎯 Practice completed! Score: ${gameData.finalScore.toLocaleString()}` :
+                    `🎯 Practice session ended. No penalties in practice mode!`,
+                rankingChange: 0
             };
         } else {
+            // Mode ranked
+            let message = '';
+            if (gameData.isCompleted) {
+                const perfectBonus = gameData.errors === 0 ? ' 🌟 Perfect game!' : '';
+                message = `🏆 Ranked completed! +${rankingPoints} points${perfectBonus}`;
+            } else if (gameData.isAbandoned) {
+                message = `🏆 Ranked abandoned. -10 points`;
+            } else {
+                message = `🏆 Ranked defeated. -15 points`;
+            }
+            
             return {
                 success: true,
-                message: gameData.isCompleted ?
-                    `Rating: ${stats.ranked.currentRating} | Level: ${level.name}` :
-                    `Game ended. Current rating: ${stats.ranked.currentRating}`,
-                stats: { ranked: stats.ranked, level }
+                message: message,
+                rankingChange: rankingPoints
             };
         }
     }
     
-    async getPlayerStats(userId) {
-        try {
-            const { db, doc, getDoc } = window.firebaseAuth;
-            const userRef = doc(db, 'users', userId);
-            const userDoc = await getDoc(userRef);
-            return userDoc.exists() ? userDoc.data().improvedStats : null;
-        } catch (error) {
-            console.error('Error getting stats:', error);
-            return null;
+    // ⚡ NOUVEAU : Calcul des ranking points
+    calculateRankingPoints(gameData, isWin) {
+        if (gameData.gameMode === 'practice') return 0;
+        
+        if (!isWin) {
+            if (gameData.isAbandoned) return -10;
+            if (gameData.isDefeated) return -15;
+            return -5;
         }
+        
+        const basePoints = 100;
+        const difficultyBonus = basePoints * (this.difficultyMultipliers[gameData.difficulty] || 1);
+        
+        // Bonus temps (max 50 points)
+        const expectedTime = this.getExpectedTime(gameData.difficulty);
+        const timeBonus = Math.max(0, Math.min(50, Math.floor((expectedTime - gameData.time) / 10)));
+        
+        // Bonus erreurs (max 30 points)
+        const errorBonus = Math.max(0, (5 - gameData.errors) * 6);
+        
+        // Bonus score (basé sur le pourcentage du score initial)
+        const scoreRatio = gameData.finalScore / gameData.initialScore;
+        const scoreBonus = Math.floor(scoreRatio * 20);
+        
+        const totalPoints = Math.max(10, Math.round(difficultyBonus + timeBonus + errorBonus + scoreBonus));
+        
+        console.log('📊 Ranking points calculation:', {
+            difficulty: gameData.difficulty,
+            difficultyBonus,
+            timeBonus,
+            errorBonus,
+            scoreBonus,
+            totalPoints
+        });
+        
+        return totalPoints;
     }
     
-    async savePlayerStats(userId, stats) {
-        try {
-            const { db, doc, updateDoc } = window.firebaseAuth;
-            const userRef = doc(db, 'users', userId);
-            await updateDoc(userRef, { improvedStats: stats }, { merge: true });
-        } catch (error) {
-            console.error('Error saving stats:', error);
-            throw error;
-        }
+    getExpectedTime(difficulty) {
+        const expectedTimes = {
+            'easy': 300,    // 5 minutes
+            'medium': 480,  // 8 minutes
+            'hard': 720,    // 12 minutes
+            'expert': 1080, // 18 minutes
+            'master': 1800  // 30 minutes
+        };
+        return expectedTimes[difficulty] || 300;
     }
 }
 
-class SudokuRatingSystem {
-    calculateRatingChange(currentRating, gameData) {
-        const config = GAME_CONFIG.difficulties[gameData.difficulty];
-        const expectedRating = this.getDifficultyRating(gameData.difficulty);
-        const performance = this.calculatePerformance(gameData);
-        
-        const ratingDiff = currentRating - expectedRating;
-        const expected = 1 / (1 + Math.pow(10, -ratingDiff / 400));
-        const kFactor = currentRating < 1200 ? 32 : 16;
-        
-        return Math.round(kFactor * (performance - expected));
-    }
-    
-    getDifficultyRating(difficulty) {
-        const ratings = { easy: 800, medium: 1000, hard: 1200, expert: 1500, master: 1800 };
-        return ratings[difficulty];
-    }
-    
-    calculatePerformance(gameData) {
-        if (!gameData.isCompleted) return 0;
-        
-        const config = GAME_CONFIG.difficulties[gameData.difficulty];
-        const expectedTime = { easy: 300, medium: 480, hard: 720, expert: 1080, master: 1800 }[gameData.difficulty];
-        
-        const timeScore = Math.max(0, Math.min(1, expectedTime / Math.max(gameData.time, expectedTime * 0.5)));
-        const errorScore = Math.max(0, (5 - gameData.errors) / 5);
-        
-        return Math.min(1, (timeScore * 0.6) + (errorScore * 0.4));
-    }
-}
-
-class PlayerLevelSystem {
+// ⚡ NOUVEAU : Système de niveaux basé sur ranking points
+class PlayerRankingSystem {
     constructor() {
         this.levels = [
-            { name: 'Novice', minRating: 100, color: '#8e8e93' },
-            { name: 'Beginner', minRating: 600, color: '#34c759' },
-            { name: 'Intermediate', minRating: 1000, color: '#007aff' },
-            { name: 'Advanced', minRating: 1400, color: '#af52de' },
-            { name: 'Expert', minRating: 1800, color: '#ff9500' },
-            { name: 'Master', minRating: 2200, color: '#ff3b30' },
-            { name: 'Grandmaster', minRating: 2600, color: '#ffd700' }
+            { name: 'Novice', minPoints: 0, color: '#8e8e93', icon: '🥉' },
+            { name: 'Beginner', minPoints: 500, color: '#34c759', icon: '🟢' },
+            { name: 'Intermediate', minPoints: 1500, color: '#007aff', icon: '🔵' },
+            { name: 'Advanced', minPoints: 3500, color: '#af52de', icon: '🟣' },
+            { name: 'Expert', minPoints: 7000, color: '#ff9500', icon: '🟠' },
+            { name: 'Master', minPoints: 15000, color: '#ff3b30', icon: '🔴' },
+            { name: 'Grandmaster', minPoints: 30000, color: '#ffd700', icon: '👑' }
         ];
     }
     
-    getLevel(rating) {
+    getLevel(rankingPoints) {
         for (let i = this.levels.length - 1; i >= 0; i--) {
-            if (rating >= this.levels[i].minRating) return this.levels[i];
+            if (rankingPoints >= this.levels[i].minPoints) return this.levels[i];
         }
         return this.levels[0];
+    }
+    
+    getNextLevel(rankingPoints) {
+        const currentLevel = this.getLevel(rankingPoints);
+        const currentIndex = this.levels.findIndex(level => level.name === currentLevel.name);
+        
+        if (currentIndex < this.levels.length - 1) {
+            return this.levels[currentIndex + 1];
+        }
+        return null; // Already at max level
     }
 }
 
 // ============= 3. GESTIONNAIRES DE JEU =============
 class GameManager {
     constructor() {
-        this.statsManager = new ImprovedStatsManager();
+        // ⚡ NOUVEAU : Utiliser le nouveau système de ranking
+        this.statsManager = new RankingStatsManager();
+        this.rankingSystem = new PlayerRankingSystem();
     }
     
     async startNewGame(difficulty, gameMode) {
@@ -305,6 +283,8 @@ class GameManager {
         clearInterval(gameTimer);
         
         const gameData = this.createGameData(endType);
+        
+        // ⚡ NOUVEAU : Utiliser le système de ranking pour mettre à jour les stats
         const result = await this.statsManager.updateStats(gameData);
         
         if (endType === 'completed') {
@@ -319,6 +299,7 @@ class GameManager {
     }
     
     createGameData(endType) {
+        // ⚡ NOUVEAU : Structure de données complète pour les rankings
         return {
             difficulty: gameState.difficulty,
             finalScore: gameState.score,
@@ -329,8 +310,22 @@ class GameManager {
             isAbandoned: endType === 'abandoned',
             isDefeated: endType === 'defeated',
             gameMode: gameState.gameMode,
-            endType
+            endType,
+            // ⚡ NOUVEAU : Champs additionnels pour les rankings
+            performance: this.calculatePerformance(),
+            isPerfectGame: gameState.errors === 0 && endType === 'completed'
         };
+    }
+    
+    // ⚡ NOUVEAU : Calcul de la performance du joueur
+    calculatePerformance() {
+        if (!gameState.isPlaying && gameState.errors >= 5) return 0;
+        
+        const scoreRatio = gameState.score / gameState.initialScore;
+        const errorPenalty = gameState.errors * 0.1;
+        const performance = Math.max(0, Math.min(100, (scoreRatio * 100) - (errorPenalty * 100)));
+        
+        return Math.round(performance);
     }
     
     async saveAbandonIfNeeded() {
@@ -584,6 +579,19 @@ class ModalManager {
         this.addExtraStat(statsContainer, 'Game Mode', 
             gameData.gameMode === 'ranked' ? '🏆 Ranked' : '🎯 Practice');
         
+        // ⚡ NOUVEAU : Afficher les points de ranking gagnés
+        if (gameData.gameMode === 'ranked' && result.rankingChange) {
+            const pointsText = result.rankingChange > 0 ? 
+                `+${result.rankingChange} points` : 
+                `${result.rankingChange} points`;
+            this.addExtraStat(statsContainer, 'Ranking Points', pointsText);
+        }
+        
+        // ⚡ NOUVEAU : Afficher si c'est un jeu parfait
+        if (gameData.isPerfectGame) {
+            this.addExtraStat(statsContainer, 'Perfect Game', '🌟 No errors!');
+        }
+        
         if (result.success) {
             this.addExtraStat(statsContainer, 'Statistics', '✅ Saved');
         }
@@ -612,8 +620,17 @@ class ModalManager {
         
         if (currentUser) {
             saveStatDiv.style.display = 'block';
-            saveStatusDiv.textContent = result.success ? '✅ Saved' : '❌ Error';
-            saveStatusDiv.style.color = result.success ? '#28a745' : '#dc3545';
+            
+            // ⚡ NOUVEAU : Afficher la perte de points pour ranked
+            if (gameData.gameMode === 'ranked' && result.rankingChange) {
+                saveStatusDiv.textContent = result.success ? 
+                    `${result.rankingChange} points` : '❌ Error';
+            } else {
+                saveStatusDiv.textContent = result.success ? '✅ Saved' : '❌ Error';
+            }
+            
+            saveStatusDiv.style.color = result.success ? 
+                (result.rankingChange < 0 ? '#ff6b6b' : '#28a745') : '#dc3545';
         } else {
             saveStatDiv.style.display = 'none';
         }
@@ -645,7 +662,7 @@ class ModalManager {
                         <div class="stat-value" id="defeat-mode">Practice</div>
                     </div>
                     <div class="defeat-stat" id="defeat-save-stat">
-                        <div class="stat-label">Statistics</div>
+                        <div class="stat-label">Ranking Points</div>
                         <div class="stat-value" id="defeat-save-status">💾 Saving...</div>
                     </div>
                 </div>
@@ -1493,3 +1510,276 @@ document.addEventListener('DOMContentLoaded', function() {
         mobileClose.addEventListener('click', closeMobileMenu);
     }
 });
+
+// ⚡ NOUVEAU : 14. FONCTIONS UTILITAIRES POUR RANKINGS =============
+
+// Fonction globale pour récupérer les leaderboards (utilisée par d'autres pages)
+window.getRankingLeaderboards = async function(limit = 50) {
+    try {
+        if (typeof window.getLeaderboards === 'function') {
+            return await window.getLeaderboards(null, limit);
+        } else {
+            console.warn('⚠️ getLeaderboards function not available');
+            return [];
+        }
+    } catch (error) {
+        console.error('❌ Error getting ranking leaderboards:', error);
+        return [];
+    }
+};
+
+// Fonction globale pour obtenir le rang d'un utilisateur
+window.getUserRankingPosition = async function(userId) {
+    try {
+        if (typeof window.getUserRank === 'function') {
+            return await window.getUserRank(userId);
+        } else {
+            console.warn('⚠️ getUserRank function not available');
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Error getting user ranking position:', error);
+        return null;
+    }
+};
+
+// Fonction globale pour obtenir les stats d'un joueur (utilisée par d'autres pages)
+window.getPlayerRankingStats = async function(userId) {
+    try {
+        if (typeof window.getPlayerStats === 'function') {
+            const stats = await window.getPlayerStats(userId);
+            return stats;
+        } else {
+            console.warn('⚠️ getPlayerStats function not available');
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Error getting player ranking stats:', error);
+        return null;
+    }
+};
+
+// ⚡ NOUVEAU : Fonction pour calculer le niveau basé sur les ranking points
+window.calculatePlayerRankingLevel = function(rankingPoints) {
+    const rankingSystem = new PlayerRankingSystem();
+    return rankingSystem.getLevel(rankingPoints || 0);
+};
+
+// ⚡ NOUVEAU : Fonction pour calculer le prochain niveau
+window.calculateNextRankingLevel = function(rankingPoints) {
+    const rankingSystem = new PlayerRankingSystem();
+    return rankingSystem.getNextLevel(rankingPoints || 0);
+};
+
+// ⚡ NOUVEAU : Fonction pour formater les points de ranking
+window.formatRankingPoints = function(points) {
+    if (!points || points === 0) return '0';
+    if (points >= 1000000) return `${(points / 1000000).toFixed(1)}M`;
+    if (points >= 1000) return `${(points / 1000).toFixed(1)}K`;
+    return points.toString();
+};
+
+// ⚡ NOUVEAU : Fonction pour obtenir la couleur du niveau
+window.getRankingLevelColor = function(rankingPoints) {
+    const level = window.calculatePlayerRankingLevel(rankingPoints);
+    return level.color;
+};
+
+// ⚡ NOUVEAU : Fonction pour obtenir l'icône du niveau
+window.getRankingLevelIcon = function(rankingPoints) {
+    const level = window.calculatePlayerRankingLevel(rankingPoints);
+    return level.icon;
+};
+
+// ⚡ NOUVEAU : Fonction pour calculer les points nécessaires pour le prochain niveau
+window.getPointsToNextLevel = function(rankingPoints) {
+    const nextLevel = window.calculateNextRankingLevel(rankingPoints);
+    if (!nextLevel) return 0; // Already at max level
+    return nextLevel.minPoints - (rankingPoints || 0);
+};
+
+// ⚡ NOUVEAU : Fonction pour calculer le pourcentage de progression vers le prochain niveau
+window.getLevelProgress = function(rankingPoints) {
+    const currentLevel = window.calculatePlayerRankingLevel(rankingPoints);
+    const nextLevel = window.calculateNextRankingLevel(rankingPoints);
+    
+    if (!nextLevel) return 100; // Already at max level
+    
+    const currentPoints = rankingPoints || 0;
+    const levelStart = currentLevel.minPoints;
+    const levelEnd = nextLevel.minPoints;
+    
+    const progress = ((currentPoints - levelStart) / (levelEnd - levelStart)) * 100;
+    return Math.max(0, Math.min(100, progress));
+};
+
+// ⚡ NOUVEAU : Fonction utilitaire pour les achievements
+window.checkRankingAchievements = function(gameData, previousStats = null) {
+    const achievements = [];
+    
+    // Perfect game achievement
+    if (gameData.isPerfectGame) {
+        achievements.push({
+            type: 'perfect',
+            title: 'Perfect Game!',
+            description: 'Completed without any errors',
+            icon: '🌟',
+            points: 50
+        });
+    }
+    
+    // First ranked win
+    if (gameData.gameMode === 'ranked' && gameData.isCompleted && 
+        previousStats && previousStats.ranking?.rankingPoints === 0) {
+        achievements.push({
+            type: 'first_ranked',
+            title: 'First Victory!',
+            description: 'Won your first ranked game',
+            icon: '🎉',
+            points: 100
+        });
+    }
+    
+    // High score achievements
+    if (gameData.finalScore >= 20000) {
+        achievements.push({
+            type: 'high_score',
+            title: 'High Scorer',
+            description: 'Achieved 20,000+ points',
+            icon: '💯',
+            points: 25
+        });
+    }
+    
+    // Speed run achievements
+    if (gameData.isCompleted && gameData.time <= 300) { // 5 minutes
+        achievements.push({
+            type: 'speed_run',
+            title: 'Speed Runner',
+            description: 'Completed in under 5 minutes',
+            icon: '⚡',
+            points: 30
+        });
+    }
+    
+    return achievements;
+};
+
+// ⚡ NOUVEAU : Fonction pour afficher les achievements
+window.showAchievements = function(achievements) {
+    if (!achievements || achievements.length === 0) return;
+    
+    achievements.forEach((achievement, index) => {
+        setTimeout(() => {
+            const toast = document.createElement('div');
+            toast.className = 'achievement-toast';
+            toast.innerHTML = `
+                <div class="achievement-icon">${achievement.icon}</div>
+                <div class="achievement-content">
+                    <div class="achievement-title">${achievement.title}</div>
+                    <div class="achievement-description">${achievement.description}</div>
+                    ${achievement.points ? `<div class="achievement-points">+${achievement.points} bonus points</div>` : ''}
+                </div>
+            `;
+            toast.style.cssText = `
+                position: fixed; top: ${20 + (index * 80)}px; right: 20px; 
+                background: linear-gradient(135deg, #ffd700, #ff8c00); color: #1c1c1e;
+                padding: 16px 20px; border-radius: 12px; z-index: 10001; 
+                font-weight: 600; box-shadow: 0 8px 25px rgba(255,215,0,0.4);
+                animation: slideIn 0.5s ease-out; display: flex; align-items: center; gap: 12px;
+                min-width: 300px; border: 2px solid rgba(255,255,255,0.3);
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.5s ease-in';
+                setTimeout(() => toast.remove(), 500);
+            }, 4000);
+        }, index * 1000);
+    });
+};
+
+// ⚡ NOUVEAU : Style CSS pour les achievements
+const achievementStyles = `
+    .achievement-toast .achievement-icon {
+        font-size: 24px;
+        flex-shrink: 0;
+    }
+    
+    .achievement-toast .achievement-content {
+        flex: 1;
+    }
+    
+    .achievement-toast .achievement-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+    
+    .achievement-toast .achievement-description {
+        font-size: 14px;
+        opacity: 0.9;
+        margin-bottom: 2px;
+    }
+    
+    .achievement-toast .achievement-points {
+        font-size: 12px;
+        font-weight: 600;
+        color: #ff6b35;
+    }
+`;
+
+// Injecter les styles CSS
+if (!document.getElementById('achievement-styles')) {
+    const styleSheet = document.createElement('style');
+    styleSheet.id = 'achievement-styles';
+    styleSheet.textContent = achievementStyles;
+    document.head.appendChild(styleSheet);
+}
+
+// ⚡ NOUVEAU : Debug et monitoring des rankings
+window.debugRankingSystem = function() {
+    console.group('🏆 Ranking System Debug');
+    console.log('Current User:', currentUser?.email || 'Not logged in');
+    console.log('Game State:', {
+        mode: gameState.gameMode,
+        difficulty: gameState.difficulty,
+        score: gameState.score,
+        errors: gameState.errors,
+        time: gameState.time
+    });
+    
+    if (currentUser) {
+        window.getPlayerRankingStats(currentUser.uid).then(stats => {
+            console.log('User Stats:', stats);
+        });
+        
+        window.getUserRankingPosition(currentUser.uid).then(rank => {
+            console.log('User Rank:', rank);
+        });
+    }
+    
+    console.groupEnd();
+};
+
+// ⚡ NOUVEAU : Auto-monitoring pour le développement
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    console.log('🔧 Development mode: Ranking system debugging enabled');
+    
+    // Debug automatique toutes les 30 secondes en mode dev
+    setInterval(() => {
+        if (currentUser && gameState.gameInProgress) {
+            console.log('🎮 Game Progress:', {
+                user: currentUser.email,
+                mode: gameState.gameMode,
+                difficulty: gameState.difficulty,
+                time: gameState.time,
+                score: gameState.score,
+                errors: gameState.errors
+            });
+        }
+    }, 30000);
+}
+
+console.log('✅ Script.js with complete ranking system loaded successfully!');

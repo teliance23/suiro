@@ -11,13 +11,12 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- Firebase SDK -->
+    <!-- Firebase SDK - CORRIGÉ avec tous les imports nécessaires -->
     <script type="module">
-        // Import Firebase functions
+        // Import Firebase functions - IMPORTS COMPLETS
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, getDoc, updateDoc, collection, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-        import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // Firebase configuration
         const firebaseConfig = {
@@ -34,26 +33,24 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const storage = getStorage(app);
 
-        // Make Firebase functions globally available
+        // Make Firebase functions globally available - COMPLET
         window.firebaseAuth = {
             auth,
             db,
-            storage,
             onAuthStateChanged,
             signOut,
             updateProfile,
             doc,
             getDoc,
+            setDoc,
             updateDoc,
             collection,
             query,
             where,
-            getDocs,
-            ref,
-            uploadBytes,
-            getDownloadURL
+            orderBy,
+            limit,
+            getDocs
         };
 
         // ============= FONCTIONS GLOBALES DE PROFIL =============
@@ -83,7 +80,7 @@
             return userData.profile?.isProfileComplete === true;
         };
 
-        // Fonction pour récupérer les données utilisateur complètes
+        // Fonction pour récupérer les données utilisateur complètes - CORRIGÉE
         window.getUserData = async function(user) {
             try {
                 const userRef = doc(db, 'users', user.uid);
@@ -92,14 +89,47 @@
                 if (userDoc.exists()) {
                     return { ...user, ...userDoc.data() };
                 }
-                return user;
+                
+                // Créer un profil par défaut si aucune donnée
+                const defaultProfile = {
+                    displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+                    email: user.email,
+                    profile: {
+                        isProfileComplete: false,
+                        displayPreference: 'realname',
+                        joinDate: new Date(),
+                        gamertag: '',
+                        nationality: '',
+                        bio: ''
+                    },
+                    preferences: {
+                        defaultDifficulty: 'easy',
+                        defaultMode: 'practice'
+                    },
+                    privacy: {
+                        profileVisibility: 'public',
+                        showInLeaderboards: true
+                    }
+                };
+                
+                // Sauvegarder le profil par défaut
+                await setDoc(userRef, defaultProfile);
+                return { ...user, ...defaultProfile };
+                
             } catch (error) {
                 console.error('Error fetching user data:', error);
-                return user;
+                throw new Error('Failed to load user data');
             }
         };
 
         console.log('🔥 Firebase initialized on settings page');
+        
+        // Optimisation de performance
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                getUserData(user).catch(console.error);
+            }
+        });
     </script>
     
     <style>
@@ -115,14 +145,6 @@
             user-select: none;
         }
 
-        input, textarea {
-            -webkit-user-select: text;
-            -moz-user-select: text;
-            -ms-user-select: text;
-            user-select: text;
-            caret-color: #007aff;
-        }
-
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
             background-color: #f2f2f7;
@@ -130,6 +152,15 @@
             line-height: 1;
             min-height: 100vh;
             overflow-x: hidden;
+        }
+
+        /* Allow text selection for form inputs */
+        input, textarea, [contenteditable] {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+            caret-color: #007aff;
         }
 
         /* ============= HEADER DYNAMIQUE - STYLES ============= */
@@ -227,7 +258,7 @@
             margin-right: 4px;
         }
 
-        /* ============= HEADER (identique au code original) ============= */
+        /* ============= HEADER ============= */
         .header {
             display: flex;
             justify-content: flex-end;
@@ -305,22 +336,16 @@
             align-items: center;
         }
 
-        .profile-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: 2px solid transparent;
+        .login-btn {
+            background: transparent;
+            border: 2px solid #e2e8f0;
+            color: #4a5568;
         }
 
-        .profile-btn:hover {
-            background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-        }
-
-        .signup-btn:hover {
-            background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        .login-btn:hover {
+            background-color: #f7fafc;
+            border-color: #cbd5e0;
+            color: #2d3748;
         }
 
         /* ============= MOBILE HAMBURGER ============= */
@@ -499,7 +524,7 @@
             backdrop-filter: blur(20px);
             border: 1px solid rgba(229, 229, 234, 0.3);
             border-radius: 24px;
-            padding: 40px;
+            padding: 32px;
             margin-bottom: 32px;
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
             text-align: center;
@@ -522,10 +547,8 @@
             margin-bottom: 24px;
         }
 
-
-
-        /* ============= PROFILE PHOTO SECTION ============= */
-        .photo-section {
+        /* ============= SETTINGS SECTIONS ============= */
+        .settings-section {
             background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(229, 229, 234, 0.3);
@@ -533,129 +556,42 @@
             padding: 32px;
             margin-bottom: 24px;
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease;
+        }
+
+        .settings-section:hover {
+            transform: translateY(-2px);
         }
 
         .section-title {
             font-size: 20px;
             font-weight: 700;
             color: #1c1c1e;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             display: flex;
             align-items: center;
             gap: 12px;
         }
 
-        .photo-container {
-            display: flex;
-            align-items: center;
-            gap: 24px;
+        .section-icon {
+            font-size: 24px;
         }
 
-        .current-photo {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 36px;
-            color: white;
-            font-weight: 700;
-            border: 4px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
-            overflow: hidden;
-        }
-
-        .current-photo img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .photo-actions {
-            flex: 1;
-        }
-
-        .photo-upload {
-            position: relative;
-            display: inline-block;
-            margin-bottom: 12px;
-        }
-
-        .upload-btn {
-            background: linear-gradient(135deg, #007aff, #0056b3);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .upload-btn:hover {
-            background: linear-gradient(135deg, #0056b3, #004494);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
-        }
-
-        .file-input {
-            position: absolute;
-            opacity: 0;
-            width: 100%;
-            height: 100%;
-            cursor: pointer;
-        }
-
-        .photo-info {
-            font-size: 12px;
-            color: #8e8e93;
-            line-height: 1.4;
-        }
-
-        /* ============= FORM SECTIONS ============= */
-        .form-section {
-            background: rgba(255, 255, 255, 0.98);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(229, 229, 234, 0.3);
-            border-radius: 20px;
-            padding: 32px;
-            margin-bottom: 24px;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
-        }
-
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 24px;
-        }
-
+        /* ============= FORM ELEMENTS ============= */
         .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            margin-bottom: 24px;
         }
 
         .form-label {
+            display: block;
             font-size: 14px;
             font-weight: 600;
             color: #1c1c1e;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .required-star {
-            color: #ff3b30;
-            font-size: 16px;
+            margin-bottom: 8px;
         }
 
         .form-input {
+            width: 100%;
             padding: 16px 20px;
             border: 2px solid #e5e5ea;
             border-radius: 12px;
@@ -665,6 +601,7 @@
             color: #1c1c1e;
             transition: all 0.3s ease;
             outline: none;
+            font-family: inherit;
         }
 
         .form-input:focus {
@@ -672,13 +609,18 @@
             box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
         }
 
-        .form-input:disabled {
-            background: #f2f2f7;
+        .form-input::placeholder {
             color: #8e8e93;
+        }
+
+        .form-input:disabled {
+            background-color: #f8f9fa;
+            color: #6c757d;
             cursor: not-allowed;
         }
 
         .form-select {
+            width: 100%;
             padding: 16px 20px;
             border: 2px solid #e5e5ea;
             border-radius: 12px;
@@ -687,29 +629,18 @@
             background: #fff;
             color: #1c1c1e;
             transition: all 0.3s ease;
+            outline: none;
+            font-family: inherit;
             cursor: pointer;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-            background-position: right 12px center;
-            background-repeat: no-repeat;
-            background-size: 16px;
-            padding-right: 50px;
         }
 
         .form-select:focus {
             border-color: #007aff;
             box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
-            outline: none;
-        }
-
-        .country-option {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 0;
         }
 
         .form-textarea {
+            width: 100%;
             padding: 16px 20px;
             border: 2px solid #e5e5ea;
             border-radius: 12px;
@@ -719,9 +650,9 @@
             color: #1c1c1e;
             transition: all 0.3s ease;
             outline: none;
-            resize: vertical;
-            min-height: 100px;
             font-family: inherit;
+            resize: vertical;
+            min-height: 120px;
         }
 
         .form-textarea:focus {
@@ -729,211 +660,156 @@
             box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
         }
 
-        .form-help {
-            font-size: 12px;
+        .form-textarea::placeholder {
             color: #8e8e93;
-            margin-top: 4px;
-            line-height: 1.4;
-        }
-
-        .gamertag-status {
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 4px;
-            padding: 4px 8px;
-            border-radius: 6px;
-            display: inline-block;
-        }
-
-        .gamertag-available {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .gamertag-taken {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .gamertag-checking {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        /* ============= TOGGLE SWITCH ============= */
-        .toggle-container {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .toggle {
-            position: relative;
-            width: 50px;
-            height: 28px;
-            background: #e5e5ea;
-            border-radius: 14px;
-            cursor: pointer;
-            transition: background 0.3s ease;
-        }
-
-        .toggle.active {
-            background: #007aff;
-        }
-
-        .toggle-slider {
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 24px;
-            height: 24px;
-            background: white;
-            border-radius: 50%;
-            transition: transform 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .toggle.active .toggle-slider {
-            transform: translateX(22px);
-        }
-
-        .toggle-label {
-            font-size: 14px;
-            font-weight: 500;
-            color: #1c1c1e;
         }
 
         /* ============= RADIO BUTTONS ============= */
         .radio-group {
             display: flex;
-            flex-direction: column;
-            gap: 12px;
+            gap: 16px;
+            margin-top: 8px;
         }
 
-        .radio-option {
+        .radio-item {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
+            cursor: pointer;
             padding: 12px 16px;
             border: 2px solid #e5e5ea;
-            border-radius: 12px;
-            cursor: pointer;
+            border-radius: 8px;
             transition: all 0.3s ease;
+            flex: 1;
+            justify-content: center;
         }
 
-        .radio-option:hover {
-            border-color: #d1d1d6;
-            background: #f8f9fa;
-        }
-
-        .radio-option.selected {
+        .radio-item:hover {
             border-color: #007aff;
-            background: rgba(0, 122, 255, 0.05);
+            background-color: rgba(0, 122, 255, 0.05);
+        }
+
+        .radio-item.selected {
+            border-color: #007aff;
+            background-color: rgba(0, 122, 255, 0.1);
         }
 
         .radio-input {
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #e5e5ea;
+            display: none;
+        }
+
+        .radio-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1c1c1e;
+        }
+
+        /* ============= AVATAR SECTION ============= */
+        .avatar-section {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .avatar-display {
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
-            position: relative;
-            cursor: pointer;
-            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: white;
+            font-weight: 700;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
         }
 
-        .radio-input:checked {
-            border-color: #007aff;
-            background: #007aff;
-        }
-
-        .radio-input:checked::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 8px;
-            height: 8px;
-            background: white;
-            border-radius: 50%;
-        }
-
-        .radio-text {
+        .avatar-info {
             flex: 1;
         }
 
-        .radio-title {
-            font-size: 16px;
-            font-weight: 600;
+        .avatar-name {
+            font-size: 20px;
+            font-weight: 700;
             color: #1c1c1e;
             margin-bottom: 4px;
         }
 
-        .radio-description {
+        .avatar-email {
             font-size: 14px;
             color: #8e8e93;
         }
 
-        /* ============= SAVE BUTTON ============= */
-        .save-container {
-            background: rgba(255, 255, 255, 0.98);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(229, 229, 234, 0.3);
-            border-radius: 20px;
-            padding: 32px;
-            margin-bottom: 32px;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
-            text-align: center;
-        }
-
-        .save-btn {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            border: none;
+        /* ============= BUTTONS ============= */
+        .btn {
             padding: 16px 32px;
             border-radius: 12px;
-            font-size: 18px;
-            font-weight: 700;
+            font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
-            display: flex;
+            border: none;
+            text-decoration: none;
+            display: inline-flex;
             align-items: center;
-            gap: 12px;
-            margin: 0 auto;
+            justify-content: center;
+            gap: 8px;
+            min-width: 120px;
         }
 
-        .save-btn:hover {
-            background: linear-gradient(135deg, #20c997, #17a2b8);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(32, 201, 151, 0.4);
-        }
-
-        .save-btn:active {
-            transform: scale(0.98);
-        }
-
-        .save-btn:disabled {
-            background: #e5e5ea;
-            color: #8e8e93;
+        .btn:disabled {
+            opacity: 0.6;
             cursor: not-allowed;
             transform: none;
-            box-shadow: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280, #9ca3af);
+            color: white;
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: linear-gradient(135deg, #4b5563, #6b7280);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(75, 85, 99, 0.4);
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        /* ============= ACTIONS SECTION ============= */
+        .actions-section {
+            display: flex;
+            gap: 16px;
+            justify-content: flex-end;
+            margin-top: 32px;
         }
 
         /* ============= LOADING STATE ============= */
         .loading-container {
-            display: none;
+            display: flex;
             align-items: center;
             justify-content: center;
             min-height: 400px;
             flex-direction: column;
             gap: 16px;
-        }
-
-        .loading-container.show {
-            display: flex;
         }
 
         .spinner {
@@ -956,7 +832,51 @@
             font-weight: 500;
         }
 
-        /* ============= FOOTER (identique au code original) ============= */
+        /* ============= SUCCESS MESSAGE ============= */
+        .success-message {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-weight: 600;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .success-message.show {
+            display: flex;
+        }
+
+        .success-icon {
+            font-size: 20px;
+        }
+
+        /* ============= ERROR MESSAGE ============= */
+        .error-message {
+            background: linear-gradient(135deg, #ff3b30, #d70015);
+            color: white;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-weight: 600;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+        }
+
+        .error-message.show {
+            display: flex;
+        }
+
+        .error-icon {
+            font-size: 20px;
+        }
+
+        /* ============= FOOTER ============= */
         .footer {
             position: fixed;
             bottom: 0;
@@ -1053,28 +973,34 @@
                 font-size: 24px;
             }
 
-            .form-section,
-            .photo-section,
-            .save-container {
+            .settings-section {
                 padding: 20px;
                 margin-bottom: 16px;
             }
 
-            .form-grid {
-                grid-template-columns: 1fr;
-                gap: 16px;
-            }
-
-            .photo-container {
+            .avatar-section {
                 flex-direction: column;
                 text-align: center;
-                gap: 16px;
             }
 
-            .current-photo {
-                width: 80px;
-                height: 80px;
-                font-size: 28px;
+            .avatar-display {
+                width: 60px;
+                height: 60px;
+                font-size: 24px;
+            }
+
+            .radio-group {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .actions-section {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .btn {
+                width: 100%;
             }
         }
 
@@ -1087,94 +1013,95 @@
                 padding: 20px 16px;
             }
 
-            .form-section,
-            .photo-section,
-            .save-container {
+            .settings-section {
                 padding: 16px;
             }
 
-            .current-photo {
-                width: 60px;
-                height: 60px;
-                font-size: 24px;
+            .form-input, .form-select, .form-textarea {
+                padding: 12px 16px;
+                font-size: 14px;
             }
 
-            .save-btn {
-                font-size: 16px;
-                padding: 14px 28px;
+            .btn {
+                padding: 12px 24px;
+                font-size: 14px;
             }
         }
     </style>
 </head>
 <body>
-    <!-- Menu Mobile Overlay -->
-    <div class="mobile-overlay" id="mobile-overlay"></div>
+    <div class="main-content">
+        <!-- Menu Mobile Overlay -->
+        <div class="mobile-overlay" id="mobile-overlay"></div>
 
-    <!-- Menu Mobile -->
-    <div class="mobile-menu" id="mobile-menu">
-        <div class="mobile-menu-header">
-            <div class="mobile-logo">Suirodoku.com</div>
-            <button class="mobile-close" id="mobile-close">×</button>
-        </div>
-        
-        <div class="mobile-menu-content">
-            <div class="mobile-nav-section">
-                <div class="mobile-section-title">Navigation</div>
-                <button class="mobile-nav-item" onclick="navigateTo('home'); closeMobileMenu();">
-                    🏠 Home
-                </button>
-                <button class="mobile-nav-item" onclick="navigateTo('tutorial'); closeMobileMenu();">
-                    📚 How to Play
-                </button>
-                <button class="mobile-nav-item" onclick="navigateTo('leaderboard'); closeMobileMenu();">
-                    🏆 Leaderboards
-                </button>
+        <!-- Menu Mobile -->
+        <div class="mobile-menu" id="mobile-menu">
+            <div class="mobile-menu-header">
+                <div class="mobile-logo">Suirodoku.com</div>
+                <button class="mobile-close" id="mobile-close">×</button>
             </div>
             
-            <!-- Section Account - Dynamique selon l'état de connexion -->
-            <div class="mobile-nav-section" id="mobile-auth-section">
-                <div class="mobile-section-title">Account</div>
+            <div class="mobile-menu-content">
+                <div class="mobile-nav-section">
+                    <div class="mobile-section-title">Navigation</div>
+                    <button class="mobile-nav-item" onclick="navigateTo('tutorial'); closeMobileMenu();">
+                        How to Play
+                    </button>
+                    <button class="mobile-nav-item" onclick="navigateTo('leaderboard'); closeMobileMenu();">
+                        Leaderboards
+                    </button>
+                </div>
+                
+                <div class="mobile-nav-section">
+                    <div class="mobile-section-title">Game</div>
+                    <button class="mobile-nav-item" onclick="navigateTo('home'); closeMobileMenu();">
+                        Play Game
+                    </button>
+                </div>
+                
+                <!-- Section Account - Dynamique selon l'état de connexion -->
+                <div class="mobile-nav-section" id="mobile-auth-section">
+                    <div class="mobile-section-title">Account</div>
+                    <!-- Contenu dynamique injecté par JavaScript -->
+                </div>
+                
+                <div class="mobile-nav-section">
+                    <div class="mobile-section-title">Legal</div>
+                    <button class="mobile-nav-item" onclick="navigateTo('legal'); closeMobileMenu();">
+                        Privacy & Terms
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Hamburger Button -->
+        <div class="mobile-hamburger" id="mobile-hamburger">
+            <div class="hamburger-line"></div>
+            <div class="hamburger-line"></div>
+            <div class="hamburger-line"></div>
+        </div>
+
+        <!-- Header -->
+        <div class="header">
+            <div class="logo" onclick="goToHome()">Suirodoku.com</div>
+            
+            <!-- Navigation Menu (Desktop) -->
+            <nav class="nav-menu">
+                <button class="nav-btn" onclick="navigateTo('tutorial')">
+                    How to Play
+                </button>
+                
+                <button class="nav-btn" onclick="navigateTo('leaderboard')">
+                    Leaderboards
+                </button>
+            </nav>
+            
+            <!-- Auth Buttons (Desktop) - Dynamique selon l'état de connexion -->
+            <div class="auth-buttons" id="desktop-auth-buttons">
                 <!-- Contenu dynamique injecté par JavaScript -->
             </div>
-            
-            <div class="mobile-nav-section">
-                <div class="mobile-section-title">Legal</div>
-                <button class="mobile-nav-item" onclick="navigateTo('legal'); closeMobileMenu();">
-                    📄 Privacy & Terms
-                </button>
-            </div>
         </div>
-    </div>
 
-    <!-- Mobile Hamburger Button -->
-    <div class="mobile-hamburger" id="mobile-hamburger">
-        <div class="hamburger-line"></div>
-        <div class="hamburger-line"></div>
-        <div class="hamburger-line"></div>
-    </div>
-
-    <!-- Header -->
-    <div class="header">
-        <div class="logo" onclick="goToHome()">Suirodoku.com</div>
-        
-        <!-- Navigation Menu -->
-        <nav class="nav-menu">
-            <button class="nav-btn" onclick="navigateTo('tutorial')">
-                How to Play
-            </button>
-            
-            <button class="nav-btn" onclick="navigateTo('leaderboard')">
-                Leaderboards
-            </button>
-        </nav>
-        
-        <!-- Auth Buttons (Desktop) - Dynamique selon l'état de connexion -->
-        <div class="auth-buttons" id="desktop-auth-buttons">
-            <!-- Contenu dynamique injecté par JavaScript -->
-        </div>
-    </div>
-
-    <div class="main-content">
         <!-- Settings Container -->
         <div class="settings-container">
             <!-- Loading State -->
@@ -1187,186 +1114,175 @@
             <div id="settings-content" style="display: none;">
                 <!-- Settings Header -->
                 <div class="settings-header">
-                    <div class="settings-title">Profile Settings</div>
-                    <div class="settings-subtitle">Customize your Suirodoku experience</div>
+                    <h1 class="settings-title">Account Settings</h1>
+                    <p class="settings-subtitle">Manage your profile and preferences</p>
                 </div>
 
-                <!-- Basic Information -->
-                <div class="form-section">
-                    <div class="section-title">
-                        <span>👤</span>
-                        Basic Information
-                    </div>
-                    <div class="form-grid">
-                        <!-- Profile Photo -->
-                        <div class="form-group" style="grid-column: 1 / -1;">
-                            <label class="form-label">Profile Photo</label>
-                            <div class="photo-container">
-                                <div class="current-photo" id="current-photo">
-                                    ?
-                                </div>
-                                <div class="photo-actions">
-                                    <div class="photo-upload">
-                                        <button class="upload-btn">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-                                            </svg>
-                                            Choose Photo
-                                            <input type="file" class="file-input" id="photo-input" accept="image/*">
-                                        </button>
-                                    </div>
-                                    <div class="photo-info">
-                                        Upload a profile picture (JPG, PNG)<br>
-                                        Max size: 5MB • Recommended: 400x400px
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="display-name">
-                                Display Name
-                            </label>
-                            <input type="text" id="display-name" class="form-input" placeholder="Your real name" disabled>
-                            <div class="form-help">This comes from your authentication provider and cannot be changed here.</div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="email">
-                                Email Address
-                            </label>
-                            <input type="email" id="email" class="form-input" placeholder="your@email.com" disabled>
-                            <div class="form-help">Your account email address.</div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="gamertag">
-                                Gamertag
-                            </label>
-                            <input type="text" id="gamertag" class="form-input" placeholder="Choose a unique gamertag (optional)" maxlength="20">
-                            <div class="gamertag-status" id="gamertag-status" style="display: none;"></div>
-                            <div class="form-help">Your unique username for leaderboards. 3-20 characters, letters and numbers only.</div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="nationality">
-                                Nationality
-                            </label>
-                            <select id="nationality" class="form-select">
-                                <option value="">Auto-detect or select your country</option>
-                                <option value="FR">🇫🇷 France</option>
-                                <option value="US">🇺🇸 United States</option>
-                                <option value="GB">🇬🇧 United Kingdom</option>
-                                <option value="DE">🇩🇪 Germany</option>
-                                <option value="ES">🇪🇸 Spain</option>
-                                <option value="IT">🇮🇹 Italy</option>
-                                <option value="JP">🇯🇵 Japan</option>
-                                <option value="CN">🇨🇳 China</option>
-                                <option value="BR">🇧🇷 Brazil</option>
-                                <option value="CA">🇨🇦 Canada</option>
-                                <option value="AU">🇦🇺 Australia</option>
-                                <option value="IN">🇮🇳 India</option>
-                                <option value="RU">🇷🇺 Russia</option>
-                                <option value="MX">🇲🇽 Mexico</option>
-                                <option value="KR">🇰🇷 South Korea</option>
-                                <option value="NL">🇳🇱 Netherlands</option>
-                                <option value="SE">🇸🇪 Sweden</option>
-                                <option value="NO">🇳🇴 Norway</option>
-                                <option value="DK">🇩🇰 Denmark</option>
-                                <option value="FI">🇫🇮 Finland</option>
-                                <option value="CH">🇨🇭 Switzerland</option>
-                                <option value="AT">🇦🇹 Austria</option>
-                                <option value="BE">🇧🇪 Belgium</option>
-                                <option value="PL">🇵🇱 Poland</option>
-                                <option value="PT">🇵🇹 Portugal</option>
-                            </select>
-                            <div class="form-help">Your flag will be displayed next to your name in leaderboards. Auto-detected based on your location.</div>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label" for="join-date">
-                                Join Date
-                            </label>
-                            <input type="text" id="join-date" class="form-input" disabled>
-                            <div class="form-help">The date you created your account.</div>
-                        </div>
-                    </div>
+                <!-- Success Message -->
+                <div class="success-message" id="success-message">
+                    <span class="success-icon">✅</span>
+                    <span id="success-text">Settings saved successfully!</span>
                 </div>
 
-                <!-- Display Preferences -->
-                <div class="form-section">
-                    <div class="section-title">
-                        <span>👁️</span>
-                        Display Preferences
+                <!-- Error Message -->
+                <div class="error-message" id="error-message">
+                    <span class="error-icon">❌</span>
+                    <span id="error-text">Error saving settings. Please try again.</span>
+                </div>
+
+                <!-- Profile Section -->
+                <div class="settings-section">
+                    <h2 class="section-title">
+                        <span class="section-icon">👤</span>
+                        Profile Information
+                    </h2>
+
+                    <div class="avatar-section">
+                        <div class="avatar-display" id="avatar-display">?</div>
+                        <div class="avatar-info">
+                            <div class="avatar-name" id="avatar-name">Loading...</div>
+                            <div class="avatar-email" id="avatar-email">Loading...</div>
+                        </div>
                     </div>
+
                     <div class="form-group">
-                        <label class="form-label">How should your name be displayed?</label>
+                        <label class="form-label" for="display-name">Display Name</label>
+                        <input type="text" id="display-name" class="form-input" placeholder="Enter your display name" disabled>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="gamertag">Gamertag (unique)</label>
+                        <input type="text" id="gamertag" class="form-input" placeholder="Enter your gamertag">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Display Preference</label>
                         <div class="radio-group">
-                            <div class="radio-option" onclick="selectDisplayPreference('realname')">
-                                <input type="radio" name="display-preference" value="realname" class="radio-input" id="display-realname">
-                                <div class="radio-text">
-                                    <div class="radio-title">Real Name</div>
-                                    <div class="radio-description">Show your display name from authentication</div>
-                                </div>
-                            </div>
-                            <div class="radio-option" onclick="selectDisplayPreference('gamertag')">
-                                <input type="radio" name="display-preference" value="gamertag" class="radio-input" id="display-gamertag">
-                                <div class="radio-text">
-                                    <div class="radio-title">Gamertag</div>
-                                    <div class="radio-description">Show your unique gamertag</div>
-                                </div>
-                            </div>
+                            <label class="radio-item" for="display-realname">
+                                <input type="radio" id="display-realname" name="display-preference" value="realname" class="radio-input">
+                                <span class="radio-label">Real Name</span>
+                            </label>
+                            <label class="radio-item" for="display-gamertag">
+                                <input type="radio" id="display-gamertag" name="display-preference" value="gamertag" class="radio-input">
+                                <span class="radio-label">Gamertag</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="nationality">Nationality</label>
+                        <select id="nationality" class="form-select">
+                            <option value="">Select your country</option>
+                            <option value="FR">🇫🇷 France</option>
+                            <option value="US">🇺🇸 United States</option>
+                            <option value="GB">🇬🇧 United Kingdom</option>
+                            <option value="DE">🇩🇪 Germany</option>
+                            <option value="ES">🇪🇸 Spain</option>
+                            <option value="IT">🇮🇹 Italy</option>
+                            <option value="JP">🇯🇵 Japan</option>
+                            <option value="CN">🇨🇳 China</option>
+                            <option value="BR">🇧🇷 Brazil</option>
+                            <option value="CA">🇨🇦 Canada</option>
+                            <option value="AU">🇦🇺 Australia</option>
+                            <option value="IN">🇮🇳 India</option>
+                            <option value="RU">🇷🇺 Russia</option>
+                            <option value="MX">🇲🇽 Mexico</option>
+                            <option value="KR">🇰🇷 South Korea</option>
+                            <option value="NL">🇳🇱 Netherlands</option>
+                            <option value="SE">🇸🇪 Sweden</option>
+                            <option value="NO">🇳🇴 Norway</option>
+                            <option value="DK">🇩🇰 Denmark</option>
+                            <option value="FI">🇫🇮 Finland</option>
+                            <option value="CH">🇨🇭 Switzerland</option>
+                            <option value="AT">🇦🇹 Austria</option>
+                            <option value="BE">🇧🇪 Belgium</option>
+                            <option value="PL">🇵🇱 Poland</option>
+                            <option value="PT">🇵🇹 Portugal</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="bio">Bio (optional)</label>
+                        <textarea id="bio" class="form-textarea" placeholder="Tell us about yourself..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Game Preferences Section -->
+                <div class="settings-section">
+                    <h2 class="section-title">
+                        <span class="section-icon">🎮</span>
+                        Game Preferences
+                    </h2>
+
+                    <div class="form-group">
+                        <label class="form-label" for="default-difficulty">Default Difficulty</label>
+                        <select id="default-difficulty" class="form-select">
+                            <option value="easy">🟢 Easy</option>
+                            <option value="medium">🟡 Medium</option>
+                            <option value="hard">🟠 Hard</option>
+                            <option value="expert">🔴 Expert</option>
+                            <option value="master">⚫ Master</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Default Game Mode</label>
+                        <div class="radio-group">
+                            <label class="radio-item" for="mode-practice">
+                                <input type="radio" id="mode-practice" name="default-mode" value="practice" class="radio-input">
+                                <span class="radio-label">🎯 Practice</span>
+                            </label>
+                            <label class="radio-item" for="mode-ranked">
+                                <input type="radio" id="mode-ranked" name="default-mode" value="ranked" class="radio-input">
+                                <span class="radio-label">🏆 Ranked</span>
+                            </label>
                         </div>
                     </div>
                 </div>
 
-                <!-- Privacy Settings -->
-                <div class="form-section">
-                    <div class="section-title">
-                        <span>🔒</span>
-                        Privacy Settings
-                    </div>
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label class="form-label">Show in Leaderboards</label>
-                            <div class="toggle-container">
-                                <div class="toggle active" id="leaderboard-toggle" onclick="toggleLeaderboard()">
-                                    <div class="toggle-slider"></div>
-                                </div>
-                                <span class="toggle-label">Appear in public leaderboards</span>
-                            </div>
-                            <div class="form-help">When enabled, your profile will be visible in global rankings.</div>
-                        </div>
+                <!-- Privacy Section -->
+                <div class="settings-section">
+                    <h2 class="section-title">
+                        <span class="section-icon">🔒</span>
+                        Privacy & Security
+                    </h2>
 
-                        <div class="form-group">
-                            <label class="form-label">Statistics Visibility</label>
-                            <div class="radio-group">
-                                <div class="radio-option selected" onclick="selectStatsVisibility('public')">
-                                    <input type="radio" name="stats-visibility" value="public" class="radio-input" id="stats-public" checked>
-                                    <div class="radio-text">
-                                        <div class="radio-title">Public</div>
-                                        <div class="radio-description">Anyone can see your game statistics</div>
-                                    </div>
-                                </div>
-                                <div class="radio-option" onclick="selectStatsVisibility('private')">
-                                    <input type="radio" name="stats-visibility" value="private" class="radio-input" id="stats-private">
-                                    <div class="radio-text">
-                                        <div class="radio-title">Private</div>
-                                        <div class="radio-description">Only you can see your statistics</div>
-                                    </div>
-                                </div>
-                            </div>
+                    <div class="form-group">
+                        <label class="form-label">Profile Visibility</label>
+                        <div class="radio-group">
+                            <label class="radio-item" for="visibility-public">
+                                <input type="radio" id="visibility-public" name="profile-visibility" value="public" class="radio-input">
+                                <span class="radio-label">🌍 Public</span>
+                            </label>
+                            <label class="radio-item" for="visibility-private">
+                                <input type="radio" id="visibility-private" name="profile-visibility" value="private" class="radio-input">
+                                <span class="radio-label">🔒 Private</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Show in Leaderboards</label>
+                        <div class="radio-group">
+                            <label class="radio-item" for="leaderboard-yes">
+                                <input type="radio" id="leaderboard-yes" name="show-leaderboard" value="true" class="radio-input">
+                                <span class="radio-label">✅ Yes</span>
+                            </label>
+                            <label class="radio-item" for="leaderboard-no">
+                                <input type="radio" id="leaderboard-no" name="show-leaderboard" value="false" class="radio-input">
+                                <span class="radio-label">❌ No</span>
+                            </label>
                         </div>
                     </div>
                 </div>
 
-                <!-- Save Button -->
-                <div class="save-container">
-                    <button class="save-btn" id="save-btn" onclick="saveProfile()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/>
-                        </svg>
-                        Save Profile
+                <!-- Actions -->
+                <div class="actions-section">
+                    <button class="btn btn-secondary" onclick="resetToDefaults()">
+                        Reset to Defaults
+                    </button>
+                    <button class="btn btn-primary" onclick="saveSettings()" id="save-btn">
+                        Save Settings
                     </button>
                 </div>
             </div>
@@ -1394,8 +1310,7 @@
         // ============= GLOBAL VARIABLES =============
         let currentUser = null;
         let userData = null;
-        let gamertagCheckTimeout = null;
-        let isPhotoUploading = false;
+        let isSaving = false;
 
         // ============= FIREBASE FUNCTIONS =============
         function initializeSettingsAuth() {
@@ -1419,60 +1334,71 @@
             });
         }
 
-        // ============= GESTION DYNAMIQUE DU HEADER =============
+        // ============= GESTION DYNAMIQUE DU HEADER - CORRIGÉ =============
         async function updateHeaderAuthState(user) {
             const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
             const mobileAuthSection = document.getElementById('mobile-auth-section');
             
-            if (user && desktopAuthButtons) {
-                // Récupérer les données utilisateur complètes
-                const userData = await getUserData(user);
-                
-                // Utilisateur connecté - Afficher menu utilisateur
-                const displayName = getDisplayName(userData);
-                const flag = userData.profile?.nationality ? getFlagEmoji(userData.profile.nationality) : '';
-                
-                desktopAuthButtons.innerHTML = `
-                    <div class="user-menu">
-                        <div class="user-name">
-                            <span class="user-flag">${flag}</span>
-                            <span>${displayName}</span>
-                        </div>
-                        <div class="dropdown-menu">
-                            <a href="../profile/">👤 My Profile</a>
-                            <a href="../stats/">📊 My Statistics</a>
-                            <a href="../settings/">⚙️ Settings</a>
-                            <a href="#" onclick="signOutUser()">🚪 Sign Out</a>
-                        </div>
-                    </div>
-                `;
-                
-                // Menu mobile
+            if (user) {
+                try {
+                    const userData = await getUserData(user);
+                    const displayName = getDisplayName(userData);
+                    const flag = userData.profile?.nationality ? getFlagEmoji(userData.profile.nationality) : '';
+                    
+                    if (desktopAuthButtons) {
+                        desktopAuthButtons.innerHTML = `
+                            <div class="user-menu">
+                                <div class="user-name">
+                                    <span class="user-flag">${flag}</span>
+                                    <span>${displayName}</span>
+                                </div>
+                                <div class="dropdown-menu">
+                                    <a href="../profile/">👤 My Profile</a>
+                                    <a href="../stats/">📊 My Statistics</a>
+                                    <a href="../settings/">⚙️ Settings</a>
+                                    <a href="#" onclick="signOutUser()">🚪 Sign Out</a>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    if (mobileAuthSection) {
+                        mobileAuthSection.innerHTML = `
+                            <div class="mobile-section-title">Account</div>
+                            <button class="mobile-nav-item" onclick="navigateTo('profile'); closeMobileMenu();">
+                                👤 My Profile
+                            </button>
+                            <button class="mobile-nav-item" onclick="navigateTo('stats'); closeMobileMenu();">
+                                📊 My Statistics
+                            </button>
+                            <button class="mobile-nav-item" onclick="navigateTo('settings'); closeMobileMenu();">
+                                ⚙️ Settings
+                            </button>
+                            <button class="mobile-nav-item logout" onclick="signOutUser(); closeMobileMenu();">
+                                🚪 Sign Out
+                            </button>
+                        `;
+                    }
+                } catch (error) {
+                    console.error('Error updating header:', error);
+                    if (desktopAuthButtons) {
+                        desktopAuthButtons.innerHTML = `<button class="auth-btn login-btn" onclick="signOutUser()">Sign Out</button>`;
+                    }
+                }
+            } else {
+                if (desktopAuthButtons) {
+                    desktopAuthButtons.innerHTML = `<button class="auth-btn login-btn" onclick="navigateTo('auth')">Log In</button>`;
+                }
                 if (mobileAuthSection) {
                     mobileAuthSection.innerHTML = `
                         <div class="mobile-section-title">Account</div>
-                        <button class="mobile-nav-item" onclick="navigateTo('profile'); closeMobileMenu();">
-                            <span style="margin-right: 12px;">👤</span>
-                            My Profile
-                        </button>
-                        <button class="mobile-nav-item" onclick="navigateTo('stats'); closeMobileMenu();">
-                            <span style="margin-right: 12px;">📊</span>
-                            My Statistics
-                        </button>
-                        <button class="mobile-nav-item" onclick="navigateTo('settings'); closeMobileMenu();">
-                            <span style="margin-right: 12px;">⚙️</span>
-                            Settings
-                        </button>
-                        <button class="mobile-nav-item logout" onclick="handleLogout(); closeMobileMenu();">
-                            <span style="margin-right: 12px;">🚪</span>
-                            Sign Out
-                        </button>
+                        <button class="mobile-nav-item" onclick="navigateTo('auth'); closeMobileMenu();">Log In</button>
                     `;
                 }
             }
         }
 
-        // Fonction de déconnexion
+        // Fonction de déconnexion - RENFORCÉE
         window.signOutUser = async function() {
             const confirmed = confirm('Are you sure you want to sign out?');
             if (!confirmed) return;
@@ -1481,34 +1407,23 @@
                 const { auth, signOut } = window.firebaseAuth;
                 await signOut(auth);
                 console.log('✅ User signed out successfully');
-                
-                // Rediriger vers la page d'accueil
                 window.location.href = '../';
             } catch (error) {
                 console.error('❌ Error signing out:', error);
-                alert('Error signing out. Please try again.');
+                showError('Error signing out. Please try again.');
             }
         };
 
+        // ============= LOAD USER SETTINGS - AMÉLIORÉ =============
         async function loadUserSettings(user) {
             try {
-                const { db, doc, getDoc } = window.firebaseAuth;
-                const userRef = doc(db, 'users', user.uid);
-                const userDoc = await getDoc(userRef);
-
-                if (userDoc.exists()) {
-                    userData = userDoc.data();
-                    
-                    // Mettre à jour l'interface avec les données utilisateur
-                    updateSettingsUI(user, userData);
-                } else {
-                    // Créer un profil par défaut
-                    userData = createDefaultProfile(user);
-                    updateSettingsUI(user, userData);
-                }
-
-                // Masquer le loading et afficher le contenu
-                document.getElementById('loading-container').classList.remove('show');
+                userData = await getUserData(user);
+                
+                // Update UI with user data
+                updateSettingsUI(userData);
+                
+                // Hide loading and show content
+                document.getElementById('loading-container').style.display = 'none';
                 document.getElementById('settings-content').style.display = 'block';
 
             } catch (error) {
@@ -1517,346 +1432,202 @@
             }
         }
 
-        function createDefaultProfile(user) {
-            return {
-                uid: user.uid,
-                email: user.email,
-                displayName: user.displayName || '',
-                photoURL: user.photoURL || '',
-                profile: {
-                    nationality: '',
-                    gamertag: '',
-                    displayPreference: 'realname',
-                    isProfileComplete: true, // Par défaut complet
-                    joinDate: new Date(),
-                    showInLeaderboards: true, // Par défaut public
-                    statsVisibility: 'public' // Par défaut public
-                }
-            };
-        }
-
-        function updateSettingsUI(user, data) {
-            // Basic Information
-            document.getElementById('display-name').value = user.displayName || '';
-            document.getElementById('email').value = user.email || '';
-            document.getElementById('gamertag').value = data.profile?.gamertag || '';
-            document.getElementById('nationality').value = data.profile?.nationality || '';
+        // ============= UPDATE SETTINGS UI - CORRIGÉ =============
+        function updateSettingsUI(userData) {
+            // Avatar and basic info
+            const displayName = getDisplayName(userData) || 'Anonymous Player';
+            const avatarInitial = displayName.charAt(0).toUpperCase();
             
-            // Join Date
-            const joinDate = data.profile?.joinDate ? new Date(data.profile.joinDate.seconds * 1000) : new Date();
-            document.getElementById('join-date').value = joinDate.toLocaleDateString();
+            document.getElementById('avatar-display').textContent = avatarInitial;
+            document.getElementById('avatar-name').textContent = displayName;
+            document.getElementById('avatar-email').textContent = userData.email || 'No email';
 
-            // Profile Photo
-            updateProfilePhoto(user.photoURL, user.displayName);
+            // Profile fields
+            document.getElementById('display-name').value = userData.displayName || '';
+            document.getElementById('gamertag').value = userData.profile?.gamertag || '';
+            document.getElementById('nationality').value = userData.profile?.nationality || '';
+            document.getElementById('bio').value = userData.profile?.bio || '';
 
-            // Display Preference
-            const displayPreference = data.profile?.displayPreference || 'realname';
-            selectDisplayPreference(displayPreference);
+            // Display preference
+            const displayPref = userData.profile?.displayPreference || 'realname';
+            document.getElementById(`display-${displayPref}`).checked = true;
+            updateRadioSelection('display-preference', displayPref);
 
-            // Leaderboard Toggle (default true)
-            const showInLeaderboards = data.profile?.showInLeaderboards !== false;
-            updateLeaderboardToggle(showInLeaderboards);
+            // Game preferences
+            document.getElementById('default-difficulty').value = userData.preferences?.defaultDifficulty || 'easy';
+            
+            const defaultMode = userData.preferences?.defaultMode || 'practice';
+            document.getElementById(`mode-${defaultMode}`).checked = true;
+            updateRadioSelection('default-mode', defaultMode);
 
-            // Stats Visibility (default public)
-            const statsVisibility = data.profile?.statsVisibility || 'public';
-            selectStatsVisibility(statsVisibility);
+            // Privacy settings
+            const visibility = userData.privacy?.profileVisibility || 'public';
+            document.getElementById(`visibility-${visibility}`).checked = true;
+            updateRadioSelection('profile-visibility', visibility);
 
-            // Setup gamertag validation
-            setupGamertagValidation();
-
-            // Try to auto-detect nationality if not set
-            if (!data.profile?.nationality) {
-                autoDetectNationality();
-            }
+            const showLeaderboard = userData.privacy?.showInLeaderboards !== false ? 'true' : 'false';
+            document.getElementById(`leaderboard-${showLeaderboard}`).checked = true;
+            updateRadioSelection('show-leaderboard', showLeaderboard);
         }
 
-        function updateProfilePhoto(photoURL, displayName) {
-            const photoElement = document.getElementById('current-photo');
-            if (photoURL) {
-                photoElement.innerHTML = `<img src="${photoURL}" alt="Profile">`;
-            } else {
-                const initial = (displayName || '?').charAt(0).toUpperCase();
-                photoElement.textContent = initial;
-            }
-        }
-
-        // ============= AUTO-DETECT NATIONALITY =============
-        async function autoDetectNationality() {
-            try {
-                // Utiliser l'API de géolocalisation pour détecter le pays
-                const response = await fetch('https://ipapi.co/json/');
-                const data = await response.json();
-                
-                if (data.country_code) {
-                    const countryCode = data.country_code.toUpperCase();
-                    const nationalitySelect = document.getElementById('nationality');
-                    
-                    // Vérifier si le pays est dans notre liste
-                    const option = nationalitySelect.querySelector(`option[value="${countryCode}"]`);
-                    if (option) {
-                        nationalitySelect.value = countryCode;
-                        console.log(`Auto-detected nationality: ${countryCode}`);
-                    }
-                }
-            } catch (error) {
-                console.log('Could not auto-detect nationality:', error);
-                // Pas grave, l'utilisateur peut choisir manuellement
-            }
-        }
-
-        // ============= GAMERTAG VALIDATION =============
-        function setupGamertagValidation() {
-            const gamertagInput = document.getElementById('gamertag');
-            gamertagInput.addEventListener('input', function() {
-                clearTimeout(gamertagCheckTimeout);
-                const gamertag = this.value.trim();
-                
-                if (gamertag.length === 0) {
-                    hideGamertagStatus();
-                    return;
-                }
-                
-                if (gamertag.length < 3) {
-                    showGamertagStatus('Too short (min 3 characters)', 'taken');
-                    return;
-                }
-                
-                if (gamertag.length > 20 || !/^[a-zA-Z0-9]+$/.test(gamertag)) {
-                    showGamertagStatus('Invalid format', 'taken');
-                    return;
-                }
-                
-                showGamertagStatus('Checking...', 'checking');
-                
-                gamertagCheckTimeout = setTimeout(() => {
-                    checkGamertagAvailability(gamertag);
-                }, 500);
-            });
-        }
-
-        async function checkGamertagAvailability(gamertag) {
-            try {
-                const { db, collection, query, where, getDocs } = window.firebaseAuth;
-                const usersRef = collection(db, 'users');
-                const q = query(usersRef, where('profile.gamertag', '==', gamertag));
-                const querySnapshot = await getDocs(q);
-                
-                // Si pas de résultats ou si c'est le gamertag actuel de l'utilisateur
-                if (querySnapshot.empty || (querySnapshot.docs.length === 1 && querySnapshot.docs[0].id === currentUser.uid)) {
-                    showGamertagStatus('Available!', 'available');
+        // ============= RADIO BUTTON HELPERS =============
+        function updateRadioSelection(groupName, value) {
+            document.querySelectorAll(`input[name="${groupName}"]`).forEach(radio => {
+                const label = radio.closest('.radio-item');
+                if (radio.value === value) {
+                    label.classList.add('selected');
                 } else {
-                    showGamertagStatus('Already taken', 'taken');
+                    label.classList.remove('selected');
                 }
-            } catch (error) {
-                console.error('Error checking gamertag:', error);
-                showGamertagStatus('Check failed', 'taken');
-            }
-        }
-
-        function showGamertagStatus(message, type) {
-            const statusElement = document.getElementById('gamertag-status');
-            statusElement.textContent = message;
-            statusElement.className = `gamertag-status gamertag-${type}`;
-            statusElement.style.display = 'inline-block';
-        }
-
-        function hideGamertagStatus() {
-            document.getElementById('gamertag-status').style.display = 'none';
-        }
-
-        // ============= FORM INTERACTIONS =============
-        function selectDisplayPreference(value) {
-            document.querySelectorAll('input[name="display-preference"]').forEach(radio => {
-                radio.checked = radio.value === value;
-                radio.closest('.radio-option').classList.toggle('selected', radio.value === value);
             });
         }
 
-        function selectStatsVisibility(value) {
-            document.querySelectorAll('input[name="stats-visibility"]').forEach(radio => {
-                radio.checked = radio.value === value;
-                radio.closest('.radio-option').classList.toggle('selected', radio.value === value);
-            });
-        }
-
-        function toggleLeaderboard() {
-            const toggle = document.getElementById('leaderboard-toggle');
-            toggle.classList.toggle('active');
-        }
-
-        function updateLeaderboardToggle(isActive) {
-            const toggle = document.getElementById('leaderboard-toggle');
-            if (isActive) {
-                toggle.classList.add('active');
-            } else {
-                toggle.classList.remove('active');
-            }
-        }
-
-        // ============= PHOTO UPLOAD =============
-        function setupPhotoUpload() {
-            const photoInput = document.getElementById('photo-input');
-            photoInput.addEventListener('change', handlePhotoUpload);
-        }
-
-        async function handlePhotoUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            // Validation
-            if (!file.type.startsWith('image/')) {
-                alert('Please select an image file.');
-                return;
-            }
-
-            if (file.size > 5 * 1024 * 1024) { // 5MB
-                alert('Image size must be less than 5MB.');
-                return;
-            }
-
-            if (isPhotoUploading) return;
-            isPhotoUploading = true;
-
-            try {
-                const { storage, ref, uploadBytes, getDownloadURL } = window.firebaseAuth;
-                
-                // Create reference
-                const photoRef = ref(storage, `profile-photos/${currentUser.uid}/${Date.now()}_${file.name}`);
-                
-                // Show loading state
-                const photoElement = document.getElementById('current-photo');
-                const originalContent = photoElement.innerHTML;
-                photoElement.innerHTML = '<div class="spinner" style="width: 24px; height: 24px; border-width: 2px;"></div>';
-                
-                // Upload file
-                const snapshot = await uploadBytes(photoRef, file);
-                console.log('Photo uploaded successfully');
-                
-                // Get download URL
-                const downloadURL = await getDownloadURL(snapshot.ref);
-                
-                // Update user profile with new photo URL
-                await currentUser.updateProfile({
-                    photoURL: downloadURL
-                });
-                
-                // Update UI
-                updateProfilePhoto(downloadURL, currentUser.displayName);
-                
-                alert('Profile photo updated successfully!');
-                
-            } catch (error) {
-                console.error('Error uploading photo:', error);
-                alert('Failed to upload photo. Please try again.');
-                
-                // Restore original content on error
-                updateProfilePhoto(currentUser.photoURL, currentUser.displayName);
-            } finally {
-                isPhotoUploading = false;
-            }
-        }
-
-        // ============= SAVE PROFILE =============
-        async function saveProfile() {
-            if (!currentUser) {
-                alert('Please log in to save your profile.');
-                return;
-            }
-
-            // Get form values
-            const gamertag = document.getElementById('gamertag').value.trim();
-            const nationality = document.getElementById('nationality').value;
-            const displayPreference = document.querySelector('input[name="display-preference"]:checked')?.value || 'realname';
-            const showInLeaderboards = document.getElementById('leaderboard-toggle').classList.contains('active');
-            const statsVisibility = document.querySelector('input[name="stats-visibility"]:checked')?.value || 'public';
-
-            // Validation optionnelle pour gamertag
-            if (gamertag && (gamertag.length < 3 || gamertag.length > 20)) {
-                alert('Gamertag must be between 3 and 20 characters.');
-                document.getElementById('gamertag').focus();
-                return;
-            }
-
-            if (gamertag && !/^[a-zA-Z0-9]+$/.test(gamertag)) {
-                alert('Gamertag can only contain letters and numbers.');
-                document.getElementById('gamertag').focus();
-                return;
-            }
-
-            // Check if gamertag is available (if provided and changed)
-            if (gamertag && gamertag !== userData.profile?.gamertag) {
-                const statusElement = document.getElementById('gamertag-status');
-                if (statusElement.style.display !== 'none' && !statusElement.classList.contains('gamertag-available')) {
-                    alert('Please choose an available gamertag.');
-                    document.getElementById('gamertag').focus();
-                    return;
-                }
-            }
-
-            // Disable save button
+        // ============= SAVE SETTINGS - RENFORCÉ =============
+        async function saveSettings() {
+            if (isSaving) return;
+            
+            isSaving = true;
             const saveBtn = document.getElementById('save-btn');
-            const originalText = saveBtn.innerHTML;
+            const originalText = saveBtn.textContent;
+            
             saveBtn.disabled = true;
-            saveBtn.innerHTML = `
-                <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
-                Saving...
-            `;
-
+            saveBtn.textContent = 'Saving...';
+            
             try {
-                const { db, doc, updateDoc } = window.firebaseAuth;
-                const userRef = doc(db, 'users', currentUser.uid);
+                const { auth, db, doc, updateDoc, collection, query, where, getDocs } = window.firebaseAuth;
+                const user = auth.currentUser;
                 
-                const updateData = {
+                if (!user) {
+                    throw new Error('User not authenticated');
+                }
+
+                // Collect form data
+                const gamertag = document.getElementById('gamertag').value.trim();
+                const nationality = document.getElementById('nationality').value;
+                
+                // Validation avancée
+                if (!gamertag || gamertag.length < 3) {
+                    throw new Error('Gamertag must be at least 3 characters long');
+                }
+                
+                if (!/^[a-zA-Z0-9_-]+$/.test(gamertag)) {
+                    throw new Error('Gamertag can only contain letters, numbers, underscore and dash');
+                }
+                
+                if (!nationality) {
+                    throw new Error('Please select your nationality');
+                }
+                
+                // Vérifier l'unicité du gamertag
+                try {
+                    const gamertagQuery = query(
+                        collection(db, 'users'), 
+                        where('profile.gamertag', '==', gamertag)
+                    );
+                    const existingUsers = await getDocs(gamertagQuery);
+                    
+                    if (!existingUsers.empty && existingUsers.docs[0].id !== user.uid) {
+                        throw new Error('This gamertag is already taken');
+                    }
+                } catch (error) {
+                    console.error('Error checking gamertag:', error);
+                }
+
+                const formData = {
                     profile: {
-                        nationality: nationality,
                         gamertag: gamertag,
-                        displayPreference: displayPreference,
-                        isProfileComplete: true, // Toujours true maintenant
-                        joinDate: userData.profile?.joinDate || new Date(),
-                        showInLeaderboards: showInLeaderboards,
-                        statsVisibility: statsVisibility
+                        nationality: nationality,
+                        bio: document.getElementById('bio').value.trim(),
+                        displayPreference: document.querySelector('input[name="display-preference"]:checked')?.value || 'realname',
+                        isProfileComplete: true,
+                        joinDate: userData.profile?.joinDate || new Date()
                     },
-                    lastUpdated: new Date()
+                    preferences: {
+                        defaultDifficulty: document.getElementById('default-difficulty').value,
+                        defaultMode: document.querySelector('input[name="default-mode"]:checked')?.value || 'practice'
+                    },
+                    privacy: {
+                        profileVisibility: document.querySelector('input[name="profile-visibility"]:checked')?.value || 'public',
+                        showInLeaderboards: document.querySelector('input[name="show-leaderboard"]:checked')?.value === 'true'
+                    },
+                    updatedAt: new Date()
                 };
 
-                await updateDoc(userRef, updateData, { merge: true });
-                
+                // Update Firestore
+                const userRef = doc(db, 'users', user.uid);
+                await updateDoc(userRef, formData);
+
                 // Update local userData
-                userData.profile = updateData.profile;
-                
+                userData = { ...userData, ...formData };
+
                 // Show success message
-                alert('Profile saved successfully!');
+                showSuccess('Settings saved successfully!');
                 
-                console.log('Profile saved successfully');
-                
+                // Update header to reflect changes
+                updateHeaderAuthState(user);
+
+                console.log('✅ Settings saved successfully');
+
             } catch (error) {
-                console.error('Error saving profile:', error);
-                alert('Failed to save profile. Please try again.');
+                console.error('❌ Error saving settings:', error);
+                showError(error.message || 'Failed to save settings. Please try again.');
             } finally {
-                // Re-enable save button
+                isSaving = false;
                 saveBtn.disabled = false;
-                saveBtn.innerHTML = originalText;
+                saveBtn.textContent = originalText;
             }
+        }
+
+        // ============= RESET TO DEFAULTS =============
+        function resetToDefaults() {
+            const confirmed = confirm('Are you sure you want to reset all settings to default values?');
+            if (!confirmed) return;
+
+            // Reset form to defaults
+            document.getElementById('gamertag').value = '';
+            document.getElementById('nationality').value = '';
+            document.getElementById('bio').value = '';
+            document.getElementById('default-difficulty').value = 'easy';
+            
+            // Reset radio buttons
+            document.getElementById('display-realname').checked = true;
+            updateRadioSelection('display-preference', 'realname');
+            
+            document.getElementById('mode-practice').checked = true;
+            updateRadioSelection('default-mode', 'practice');
+            
+            document.getElementById('visibility-public').checked = true;
+            updateRadioSelection('profile-visibility', 'public');
+            
+            document.getElementById('leaderboard-yes').checked = true;
+            updateRadioSelection('show-leaderboard', 'true');
+
+            showSuccess('Settings reset to default values');
+        }
+
+        // ============= MESSAGE HELPERS =============
+        function showSuccess(message) {
+            const successEl = document.getElementById('success-message');
+            const textEl = document.getElementById('success-text');
+            
+            textEl.textContent = message;
+            successEl.classList.add('show');
+            
+            setTimeout(() => {
+                successEl.classList.remove('show');
+            }, 3000);
         }
 
         function showError(message) {
-            document.getElementById('loading-container').innerHTML = `
-                <div style="text-align: center; color: #ff3b30;">
-                    <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
-                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Error</div>
-                    <div style="font-size: 14px; color: #8e8e93;">${message}</div>
-                    <button onclick="location.reload()" style="
-                        margin-top: 20px;
-                        padding: 12px 24px;
-                        background: #007aff;
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        font-weight: 600;
-                        cursor: pointer;
-                    ">Retry</button>
-                </div>
-            `;
+            const errorEl = document.getElementById('error-message');
+            const textEl = document.getElementById('error-text');
+            
+            textEl.textContent = message;
+            errorEl.classList.add('show');
+            
+            setTimeout(() => {
+                errorEl.classList.remove('show');
+            }, 5000);
         }
 
         // ============= NAVIGATION FUNCTIONS =============
@@ -1895,10 +1666,6 @@
             window.location.href = '../';
         }
 
-        function handleLogout() {
-            signOutUser();
-        }
-
         // ============= MENU MOBILE =============
         function openMobileMenu() {
             const overlay = document.getElementById('mobile-overlay');
@@ -1929,8 +1696,12 @@
             // Initialize Firebase Auth
             initializeSettingsAuth();
 
-            // Setup photo upload
-            setupPhotoUpload();
+            // Radio button handlers
+            document.querySelectorAll('input[type="radio"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    updateRadioSelection(this.name, this.value);
+                });
+            });
 
             // Mobile menu handlers
             const mobileHamburger = document.getElementById('mobile-hamburger');
@@ -1955,31 +1726,20 @@
                 mobileClose.addEventListener('click', closeMobileMenu);
             }
 
-            // Add event listeners for radio button clicks
-            document.addEventListener('click', function(e) {
-                if (e.target.closest('.radio-option')) {
-                    const radioOption = e.target.closest('.radio-option');
-                    const radioInput = radioOption.querySelector('input[type="radio"]');
-                    if (radioInput) {
-                        radioInput.checked = true;
-                        
-                        // Update visual state
-                        const name = radioInput.name;
-                        document.querySelectorAll(`input[name="${name}"]`).forEach(radio => {
-                            radio.closest('.radio-option').classList.toggle('selected', radio.checked);
-                        });
-                    }
-                }
-            });
-
-            // Keyboard navigation for save button
+            // Keyboard shortcut for save
             document.addEventListener('keydown', function(e) {
                 if (e.ctrlKey && e.key === 's') {
                     e.preventDefault();
-                    saveProfile();
+                    saveSettings();
                 }
             });
         });
+
+        // ============= DEBUG ET TEST =============
+        console.log('🧪 Testing Firebase Integration...');
+        console.log('Auth:', window.firebaseAuth?.auth ? '✅' : '❌');
+        console.log('DB:', window.firebaseAuth?.db ? '✅' : '❌');
+        console.log('Functions:', Object.keys(window.firebaseAuth || {}));
     </script>
 </body>
 </html>

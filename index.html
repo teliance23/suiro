@@ -89,34 +89,35 @@
             }
         };
 
-        // ============= FONCTIONS FIREBASE POUR LES STATISTIQUES =============
+        // ============= FONCTIONS FIREBASE UNIVERSELLES POUR LES STATISTIQUES =============
         
-        // Fonction pour mettre à jour SEULEMENT les statistiques du joueur
-        window.updatePlayerStatsOnly = async function(gameData) {
+        // ⚡ NOUVELLE FONCTION : Mettre à jour les stats pour TOUS les modes
+        window.updatePlayerStatsUniversal = async function(gameData) {
             try {
                 const user = auth.currentUser;
                 if (!user) {
                     throw new Error('User not authenticated');
                 }
 
-                console.log('🎮 Updating player stats with data:', gameData);
+                console.log('🎮 Updating universal player stats with data:', gameData);
                 
                 // Appeler directement la fonction de mise à jour des stats
-                await updatePlayerStats(user.uid, gameData);
-                console.log(`✅ Player stats updated for ${gameData.gameMode} game:`, {
+                await updatePlayerStatsForAllModes(user.uid, gameData);
+                console.log(`✅ Universal player stats updated for ${gameData.gameMode} game:`, {
                     difficulty: gameData.difficulty,
                     time: gameData.time,
                     score: gameData.finalScore,
+                    endType: gameData.endType,
                     completed: gameData.isCompleted
                 });
                 
             } catch (error) {
-                console.error('❌ Error updating player stats:', error);
+                console.error('❌ Error updating universal player stats:', error);
                 throw error;
             }
         };
 
-        // Fonction pour récupérer les stats d'un joueur
+        // ⚡ NOUVELLE FONCTION : Récupérer les stats d'un joueur (universelle)
         window.getPlayerStats = async function(userId) {
             try {
                 if (!userId) return null;
@@ -136,8 +137,8 @@
             }
         };
 
-        // Fonction pour mettre à jour les stats du joueur
-        async function updatePlayerStats(userId, gameData) {
+        // ⚡ NOUVELLE FONCTION : Mettre à jour les stats pour tous les modes (practice + ranked)
+        async function updatePlayerStatsForAllModes(userId, gameData) {
             try {
                 const userRef = doc(db, 'users', userId);
                 const userDoc = await getDoc(userRef);
@@ -153,7 +154,11 @@
                     rankedGames: 0,
                     level: 'Beginner',
                     currentPerformance: 0,
-                    lastPlayed: new Date()
+                    lastPlayed: new Date(),
+                    // ⚡ NOUVEAU : Compteurs par type de fin
+                    gamesCompleted: 0,
+                    gamesAbandoned: 0,
+                    gamesDefeated: 0
                 };
 
                 if (userDoc.exists()) {
@@ -162,7 +167,7 @@
                 }
 
                 // ============= CALCUL DU SCORE AVEC PÉNALITÉ JUSTE =============
-                const calculatedScore = calculateFairScore(gameData);
+                const calculatedScore = calculateUniversalFairScore(gameData);
 
                 // ============= MISE À JOUR DU SCORE MOYEN PONDÉRÉ =============
                 const alpha = 0.3; // Coefficient de pondération
@@ -178,11 +183,19 @@
                 const newTotalTime = currentStats.totalTimeSpent + gameData.time;
                 const newAverageTime = Math.round(newTotalTime / newTotalGames);
 
-                // Mettre à jour le compteur de mode
+                // ⚡ NOUVEAU : Mettre à jour le compteur de mode pour practice ET ranked
                 const newPracticeGames = gameData.gameMode === 'practice' ? 
                     (currentStats.practiceGames || 0) + 1 : (currentStats.practiceGames || 0);
                 const newRankedGames = gameData.gameMode === 'ranked' ? 
                     (currentStats.rankedGames || 0) + 1 : (currentStats.rankedGames || 0);
+
+                // ⚡ NOUVEAU : Compteurs par type de fin
+                const newGamesCompleted = gameData.isCompleted ? 
+                    (currentStats.gamesCompleted || 0) + 1 : (currentStats.gamesCompleted || 0);
+                const newGamesAbandoned = gameData.isAbandoned ? 
+                    (currentStats.gamesAbandoned || 0) + 1 : (currentStats.gamesAbandoned || 0);
+                const newGamesDefeated = gameData.isDefeated ? 
+                    (currentStats.gamesDefeated || 0) + 1 : (currentStats.gamesDefeated || 0);
 
                 // Mettre à jour le meilleur score pour cette difficulté (seulement si gagné)
                 const currentBest = currentStats.bestScores?.[gameData.difficulty] || 0;
@@ -192,13 +205,13 @@
                 }
 
                 // Calculer le niveau basé sur les parties ranked gagnées
-                const newLevel = calculatePlayerLevel(newRankedGames, newTotalWins, gameData.gameMode === 'ranked' && isWin);
+                const newLevel = calculateUniversalPlayerLevel(newRankedGames, newTotalWins, gameData.gameMode === 'ranked' && isWin);
 
                 // Calculer la performance actuelle (basée sur le score moyen vs score initial moyen)
                 let newPerformance = currentStats.currentPerformance || 0;
                 if (gameData.gameMode === 'ranked') {
                     // Performance basée sur le score moyen par rapport au score initial moyen
-                    const averageInitialScore = getAverageInitialScore();
+                    const averageInitialScore = getUniversalAverageInitialScore();
                     newPerformance = Math.round(((newAverageScore / averageInitialScore) * 100) * 100) / 100;
                 }
 
@@ -214,30 +227,40 @@
                     rankedGames: newRankedGames,
                     level: newLevel,
                     currentPerformance: Math.max(0, Math.min(100, newPerformance)),
-                    lastPlayed: new Date()
+                    lastPlayed: new Date(),
+                    // ⚡ NOUVEAU : Compteurs par type de fin
+                    gamesCompleted: newGamesCompleted,
+                    gamesAbandoned: newGamesAbandoned,
+                    gamesDefeated: newGamesDefeated
                 };
 
                 await updateDoc(userRef, {
                     gameStats: updatedStats
                 }, { merge: true });
 
-                console.log('✅ Player stats updated successfully:', {
+                console.log('✅ Universal player stats updated successfully:', {
                     totalGames: newTotalGames,
+                    practiceGames: newPracticeGames,
+                    rankedGames: newRankedGames,
                     averageScore: newAverageScore,
                     calculatedScore: calculatedScore,
                     finalScore: gameData.finalScore,
-                    level: newLevel
+                    level: newLevel,
+                    endType: gameData.endType,
+                    completed: newGamesCompleted,
+                    abandoned: newGamesAbandoned,
+                    defeated: newGamesDefeated
                 });
 
             } catch (error) {
-                console.error('❌ Error updating player stats:', error);
+                console.error('❌ Error updating universal player stats:', error);
                 throw error;
             }
         }
 
-        // ============= CALCUL DU SCORE AVEC PÉNALITÉ JUSTE =============
-        function calculateFairScore(gameData) {
-            const { finalScore, initialScore, isCompleted, errors, time, difficulty } = gameData;
+        // ============= CALCUL DU SCORE AVEC PÉNALITÉ JUSTE UNIVERSELLE =============
+        function calculateUniversalFairScore(gameData) {
+            const { finalScore, initialScore, isCompleted, isAbandoned, isDefeated, time, difficulty } = gameData;
             
             if (isCompleted) {
                 // Partie terminée avec succès : score réel
@@ -246,19 +269,27 @@
             
             // ============= PÉNALITÉS POUR PARTIES NON TERMINÉES =============
             
-            // 1. Base : score actuel au moment de l'abandon
+            // 1. Base : score actuel au moment de l'arrêt
             let penalizedScore = finalScore;
             
-            // 2. Pénalité de base pour abandon (20% du score initial)
-            const abandonPenalty = Math.round(initialScore * 0.20);
-            penalizedScore = Math.max(0, penalizedScore - abandonPenalty);
+            if (isAbandoned) {
+                // 2. Pénalité de base pour abandon (20% du score initial)
+                const abandonPenalty = Math.round(initialScore * 0.20);
+                penalizedScore = Math.max(0, penalizedScore - abandonPenalty);
+                
+                // 3. Pénalité proportionnelle au temps joué
+                // Plus on abandonne tôt, plus la pénalité est forte
+                const expectedMinTime = getUniversalDifficultyMinTime(difficulty);
+                const timeRatio = Math.min(time / expectedMinTime, 1);
+                const timePenalty = Math.round(initialScore * 0.15 * (1 - timeRatio));
+                penalizedScore = Math.max(0, penalizedScore - timePenalty);
+            }
             
-            // 3. Pénalité proportionnelle au temps joué
-            // Plus on abandonne tôt, plus la pénalité est forte
-            const expectedMinTime = getDifficultyMinTime(difficulty);
-            const timeRatio = Math.min(time / expectedMinTime, 1);
-            const timePenalty = Math.round(initialScore * 0.15 * (1 - timeRatio));
-            penalizedScore = Math.max(0, penalizedScore - timePenalty);
+            if (isDefeated) {
+                // Défaite (5 erreurs ou score = 0) : moins de pénalité car on a "essayé"
+                const defeatPenalty = Math.round(initialScore * 0.10);
+                penalizedScore = Math.max(0, penalizedScore - defeatPenalty);
+            }
             
             // 4. Score minimum garanti (10% du score initial)
             const minimumScore = Math.round(initialScore * 0.10);
@@ -268,7 +299,7 @@
         }
 
         // Temps minimum attendu par difficulté (en secondes)
-        function getDifficultyMinTime(difficulty) {
+        function getUniversalDifficultyMinTime(difficulty) {
             const minTimes = {
                 'easy': 180,    // 3 minutes
                 'medium': 300,  // 5 minutes  
@@ -280,12 +311,12 @@
         }
 
         // Score initial moyen pour calculer la performance
-        function getAverageInitialScore() {
+        function getUniversalAverageInitialScore() {
             return (2000 + 4000 + 8000 + 15000 + 25000) / 5; // 10,800
         }
 
-        // Fonction pour calculer le niveau du joueur
-        function calculatePlayerLevel(rankedGames, totalWins, isRankedWin) {
+        // Fonction pour calculer le niveau du joueur (universelle)
+        function calculateUniversalPlayerLevel(rankedGames, totalWins, isRankedWin) {
             if (rankedGames < 5) return 'Beginner';
             if (rankedGames < 10) return 'Novice';
             if (rankedGames < 25) return 'Intermediate';
@@ -295,7 +326,7 @@
             return 'Legend';
         }
 
-        console.log('🔥 Firebase initialized on main page with stats functions');
+        console.log('🔥 Firebase initialized on main page with universal stats functions');
     </script>
     
     <link rel="stylesheet" href="style.css">
@@ -556,49 +587,6 @@
                 </div>
 
                 <!-- Colors Section -->
-                <div class="control-section" style="margin-top: 10px;">
-                    <div class="control-header">
-                        <span class="control-title">COLORS</span>
-                        <button class="notes-toggle" id="notes-toggle-colors"><span class="pencil-icon">✏️</span></button>
-                    </div>
-                    <div class="color-grid">
-                        <button class="color-btn color-yellow" data-color="J"></button>
-                        <button class="color-btn color-orange" data-color="O"></button>
-                        <button class="color-btn color-red" data-color="R"></button>
-                        <button class="color-btn color-green" data-color="G"></button>
-                        <button class="color-btn color-brown" data-color="P"></button>
-                        <button class="color-btn color-pink" data-color="M"></button>
-                        <button class="color-btn color-cyan" data-color="T"></button>
-                        <button class="color-btn color-blue" data-color="B"></button>
-                        <button class="color-btn color-purple" data-color="V"></button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Bottom Controls (Mobile) -->
-        <div class="bottom-controls">
-            <div class="bottom-row">
-                <!-- Numbers Section -->
-                <div class="control-section">
-                    <div class="control-header">
-                        <span class="control-title">NUMBERS</span>
-                        <button class="notes-toggle" id="notes-toggle-numbers-mobile"><span class="pencil-icon">✏️</span></button>
-                    </div>
-                    <div class="number-grid">
-                        <button class="number-btn" data-number="1">1</button>
-                        <button class="number-btn" data-number="2">2</button>
-                        <button class="number-btn" data-number="3">3</button>
-                        <button class="number-btn" data-number="4">4</button>
-                        <button class="number-btn" data-number="5">5</button>
-                        <button class="number-btn" data-number="6">6</button>
-                        <button class="number-btn" data-number="7">7</button>
-                        <button class="number-btn" data-number="8">8</button>
-                        <button class="number-btn" data-number="9">9</button>
-                    </div>
-                </div>
-
-                <!-- Colors Section -->
                 <div class="control-section">
                     <div class="control-header">
                         <span class="control-title">COLORS</span>
@@ -674,7 +662,7 @@
             </div>
         </div>
 
-        <!-- Victory Modal -->
+        <!-- ⚡ NOUVEAU : Victory Modal Amélioré -->
         <div class="modal-overlay" id="victory-modal">
             <div class="victory-modal">
                 <div class="victory-icon">🏆</div>
@@ -698,6 +686,7 @@
                         <div class="stat-label">Errors</div>
                         <div class="stat-value" id="final-errors">2/5</div>
                     </div>
+                    <!-- Mode et sauvegarde ajoutés dynamiquement par JavaScript -->
                 </div>
                 
                 <div class="victory-buttons">
@@ -706,6 +695,12 @@
                 </div>
             </div>
         </div>
+
+        <!-- ⚡ NOUVEAU : Defeat Modal (créé dynamiquement par JavaScript) -->
+        <!-- Le modal de défaite sera créé par script.js lors du premier appel à showDefeatModal() -->
+
+        <!-- ⚡ NOUVEAU : Mode Selection Modal (créé dynamiquement par JavaScript) -->
+        <!-- Le modal de sélection de mode sera créé par script.js lors de l'appel à showNewGameModal() -->
     </div>
 
     <!-- Footer -->
@@ -873,4 +868,46 @@
         }
     </script>
 </body>
-</html>
+</html><button class="number-btn" data-number="7">7</button>
+                        <button class="number-btn" data-number="8">8</button>
+                        <button class="number-btn" data-number="9">9</button>
+                    </div>
+                </div>
+
+                <!-- Colors Section -->
+                <div class="control-section" style="margin-top: 10px;">
+                    <div class="control-header">
+                        <span class="control-title">COLORS</span>
+                        <button class="notes-toggle" id="notes-toggle-colors"><span class="pencil-icon">✏️</span></button>
+                    </div>
+                    <div class="color-grid">
+                        <button class="color-btn color-yellow" data-color="J"></button>
+                        <button class="color-btn color-orange" data-color="O"></button>
+                        <button class="color-btn color-red" data-color="R"></button>
+                        <button class="color-btn color-green" data-color="G"></button>
+                        <button class="color-btn color-brown" data-color="P"></button>
+                        <button class="color-btn color-pink" data-color="M"></button>
+                        <button class="color-btn color-cyan" data-color="T"></button>
+                        <button class="color-btn color-blue" data-color="B"></button>
+                        <button class="color-btn color-purple" data-color="V"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Controls (Mobile) -->
+        <div class="bottom-controls">
+            <div class="bottom-row">
+                <!-- Numbers Section -->
+                <div class="control-section">
+                    <div class="control-header">
+                        <span class="control-title">NUMBERS</span>
+                        <button class="notes-toggle" id="notes-toggle-numbers-mobile"><span class="pencil-icon">✏️</span></button>
+                    </div>
+                    <div class="number-grid">
+                        <button class="number-btn" data-number="1">1</button>
+                        <button class="number-btn" data-number="2">2</button>
+                        <button class="number-btn" data-number="3">3</button>
+                        <button class="number-btn" data-number="4">4</button>
+                        <button class="number-btn" data-number="5">5</button>
+                        <button class="number-btn" data-number="6">6</button>

@@ -3,175 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Profile | Suirodoku.com</title>
+    <title>Profile | Suirodoku.com</title>
     
-    <!-- FAVICON -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- Firebase SDK - CORRIGÉ avec tous les imports nécessaires -->
-    <script type="module">
-        // Import Firebase functions - IMPORTS COMPLETS
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, onAuthStateChanged, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyDHP3A6BZXAx72fY0_BFJQe9y1F2Za_Xo8",
-            authDomain: "suirodoku-web.firebaseapp.com",
-            projectId: "suirodoku-web",
-            storageBucket: "suirodoku-web.firebasestorage.app",
-            messagingSenderId: "936879624195",
-            appId: "1:936879624195:web:e3d2682df7c9b213d87e36",
-            measurementId: "G-RPJXTCGLZN"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        // Make Firebase functions globally available - COMPLET
-        window.firebaseAuth = {
-            auth,
-            db,
-            onAuthStateChanged,
-            signOut,
-            updateProfile,
-            doc,
-            getDoc,
-            setDoc,
-            updateDoc,
-            collection,
-            query,
-            where,
-            orderBy,
-            limit,
-            getDocs
-        };
-
-        // ============= FONCTIONS GLOBALES DE PROFIL =============
-        
-        // Fonction pour obtenir le nom d'affichage selon les préférences
-        window.getDisplayName = function(userData) {
-            if (userData.profile?.displayPreference === 'gamertag' && userData.profile?.gamertag) {
-                return userData.profile.gamertag;
-            }
-            return userData.displayName || 'Anonymous';
-        };
-
-        // Fonction pour obtenir le drapeau selon la nationalité
-        window.getFlagEmoji = function(countryCode) {
-            const flags = {
-                'FR': '🇫🇷', 'US': '🇺🇸', 'GB': '🇬🇧', 'DE': '🇩🇪', 'ES': '🇪🇸',
-                'IT': '🇮🇹', 'JP': '🇯🇵', 'CN': '🇨🇳', 'BR': '🇧🇷', 'CA': '🇨🇦',
-                'AU': '🇦🇺', 'IN': '🇮🇳', 'RU': '🇷🇺', 'MX': '🇲🇽', 'KR': '🇰🇷',
-                'NL': '🇳🇱', 'SE': '🇸🇪', 'NO': '🇳🇴', 'DK': '🇩🇰', 'FI': '🇫🇮',
-                'CH': '🇨🇭', 'AT': '🇦🇹', 'BE': '🇧🇪', 'PL': '🇵🇱', 'PT': '🇵🇹'
-            };
-            return flags[countryCode] || '🌍';
-        };
-
-        // Fonction pour récupérer les données utilisateur complètes - CORRIGÉE
-        window.getUserData = async function(user) {
-            try {
-                const userRef = doc(db, 'users', user.uid);
-                const userDoc = await getDoc(userRef);
-                
-                if (userDoc.exists()) {
-                    return { ...user, ...userDoc.data() };
-                }
-                
-                // Créer un profil par défaut si aucune donnée
-                const defaultProfile = {
-                    displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
-                    email: user.email,
-                    profile: {
-                        isProfileComplete: false,
-                        displayPreference: 'realname',
-                        joinDate: new Date(),
-                        gamertag: '',
-                        nationality: '',
-                        bio: ''
-                    },
-                    preferences: {
-                        defaultDifficulty: 'easy',
-                        defaultMode: 'practice'
-                    },
-                    privacy: {
-                        profileVisibility: 'public',
-                        showInLeaderboards: true
-                    },
-                    improvedStats: {
-                        totalGames: 0,
-                        totalPlayTime: 0,
-                        practice: {
-                            gamesPlayed: 0,
-                            gamesCompleted: 0,
-                            totalScore: 0,
-                            bestScores: {
-                                easy: 0,
-                                medium: 0,
-                                hard: 0,
-                                expert: 0,
-                                master: 0
-                            }
-                        },
-                        ranked: {
-                            gamesPlayed: 0,
-                            gamesCompleted: 0,
-                            currentRating: 1000,
-                            peakRating: 1000,
-                            winStreak: 0
-                        }
-                    }
-                };
-                
-                // Sauvegarder le profil par défaut
-                await setDoc(userRef, defaultProfile);
-                return { ...user, ...defaultProfile };
-                
-            } catch (error) {
-                console.error('Error fetching user data:', error);
-                throw new Error('Failed to load user data');
-            }
-        };
-
-        // ============= SYSTÈME DE NIVEAUX =============
-        window.getPlayerLevel = function(rating) {
-            const levels = [
-                { name: 'Novice', minRating: 100, color: '#8e8e93' },
-                { name: 'Beginner', minRating: 600, color: '#34c759' },
-                { name: 'Intermediate', minRating: 1000, color: '#007aff' },
-                { name: 'Advanced', minRating: 1400, color: '#af52de' },
-                { name: 'Expert', minRating: 1800, color: '#ff9500' },
-                { name: 'Master', minRating: 2200, color: '#ff3b30' },
-                { name: 'Grandmaster', minRating: 2600, color: '#ffd700' }
-            ];
-            
-            for (let i = levels.length - 1; i >= 0; i--) {
-                if (rating >= levels[i].minRating) {
-                    return levels[i];
-                }
-            }
-            return levels[0];
-        };
-
-        console.log('🔥 Firebase initialized on profile page with improved stats');
-        
-        // Optimisation de performance
-        auth.onAuthStateChanged((user) => {
-            if (user) {
-                getUserData(user).catch(console.error);
-            }
-        });
-    </script>
-    
     <style>
-        /* ============= RESET ET BASE ============= */
         * {
             margin: 0;
             padding: 0;
@@ -192,102 +31,6 @@
             overflow-x: hidden;
         }
 
-        /* ============= HEADER DYNAMIQUE - STYLES ============= */
-        .user-menu {
-            position: relative;
-            display: inline-block;
-        }
-
-        .user-name {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            color: #4a5568;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .user-name:hover {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: rgba(255, 255, 255, 0.3);
-            color: #2d3748;
-        }
-
-        .user-name::after {
-            content: '▼';
-            font-size: 10px;
-            transition: transform 0.3s ease;
-        }
-
-        .user-menu:hover .user-name::after {
-            transform: rotate(180deg);
-        }
-
-        .dropdown-menu {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background: white;
-            border: 1px solid rgba(229, 229, 234, 0.3);
-            border-radius: 12px;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
-            min-width: 200px;
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-10px);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-        }
-
-        .user-menu:hover .dropdown-menu {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        .dropdown-menu a {
-            display: block;
-            padding: 14px 20px;
-            color: #1c1c1e;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            border-bottom: 1px solid rgba(229, 229, 234, 0.3);
-        }
-
-        .dropdown-menu a:last-child {
-            border-bottom: none;
-        }
-
-        .dropdown-menu a:hover {
-            background: rgba(0, 122, 255, 0.05);
-            color: #007aff;
-        }
-
-        .dropdown-menu a:first-child {
-            border-top-left-radius: 12px;
-            border-top-right-radius: 12px;
-        }
-
-        .dropdown-menu a:last-child {
-            border-bottom-left-radius: 12px;
-            border-bottom-right-radius: 12px;
-        }
-
-        .user-flag {
-            font-size: 16px;
-            margin-right: 4px;
-        }
-
-        /* ============= HEADER ============= */
         .header {
             display: flex;
             justify-content: flex-end;
@@ -352,195 +95,6 @@
             gap: 12px;
         }
 
-        .auth-btn {
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: none;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-        }
-
-        .login-btn {
-            background: transparent;
-            border: 2px solid #e2e8f0;
-            color: #4a5568;
-        }
-
-        .login-btn:hover {
-            background-color: #f7fafc;
-            border-color: #cbd5e0;
-            color: #2d3748;
-        }
-
-        /* ============= MOBILE HAMBURGER ============= */
-        .mobile-hamburger {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            width: 48px;
-            height: 48px;
-            background: white;
-            border: 1px solid #e5e5ea;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            z-index: 1000;
-            transition: all 0.3s ease;
-            gap: 4px;
-        }
-
-        .mobile-hamburger:hover {
-            background-color: #f8f9fa;
-            transform: scale(1.05);
-        }
-
-        .hamburger-line {
-            width: 20px;
-            height: 2px;
-            background-color: #4a5568;
-            border-radius: 1px;
-            transition: all 0.3s ease;
-        }
-
-        .mobile-hamburger.active .hamburger-line:nth-child(1) {
-            transform: rotate(45deg) translate(5px, 5px);
-        }
-
-        .mobile-hamburger.active .hamburger-line:nth-child(2) {
-            opacity: 0;
-        }
-
-        .mobile-hamburger.active .hamburger-line:nth-child(3) {
-            transform: rotate(-45deg) translate(7px, -6px);
-        }
-
-        .mobile-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: none;
-            z-index: 2000;
-            backdrop-filter: blur(5px);
-        }
-
-        .mobile-overlay.show {
-            display: block;
-        }
-
-        .mobile-menu {
-            position: fixed;
-            top: 0;
-            right: -300px;
-            width: 300px;
-            height: 100%;
-            background: white;
-            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
-            z-index: 2001;
-            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            flex-direction: column;
-            padding: 20px 0;
-        }
-
-        .mobile-menu.show {
-            right: 0;
-        }
-
-        .mobile-menu-header {
-            padding: 0 20px 20px 20px;
-            border-bottom: 1px solid #e5e5ea;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .mobile-logo {
-            font-size: 24px;
-            font-weight: 700;
-            color: #4a5568;
-            letter-spacing: -0.6px;
-        }
-
-        .mobile-close {
-            width: 32px;
-            height: 32px;
-            background: none;
-            border: none;
-            font-size: 24px;
-            color: #666;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 6px;
-            transition: background-color 0.2s ease;
-        }
-
-        .mobile-close:hover {
-            background-color: #f5f5f5;
-        }
-
-        .mobile-menu-content {
-            flex: 1;
-            padding: 20px 0;
-            overflow-y: auto;
-        }
-
-        .mobile-nav-section {
-            margin-bottom: 32px;
-        }
-
-        .mobile-section-title {
-            font-size: 12px;
-            font-weight: 600;
-            color: #8e8e93;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 0 20px;
-            margin-bottom: 12px;
-        }
-
-        .mobile-nav-item {
-            display: block;
-            padding: 16px 20px;
-            color: #1c1c1e;
-            text-decoration: none;
-            font-size: 16px;
-            font-weight: 500;
-            border: none;
-            background: none;
-            width: 100%;
-            text-align: left;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-
-        .mobile-nav-item:hover {
-            background-color: #f8f9fa;
-        }
-
-        .mobile-nav-item.logout {
-            color: #ff3b30;
-            font-weight: 600;
-        }
-
-        .mobile-nav-item.logout:hover {
-            background-color: #fff2f2;
-        }
-
-        /* ============= PROFILE CONTAINER ============= */
         .profile-container {
             min-height: calc(100vh - 140px);
             padding: 40px 20px;
@@ -557,13 +111,13 @@
             margin-bottom: 32px;
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
             text-align: center;
+            position: relative;
         }
 
         .profile-avatar {
             width: 120px;
             height: 120px;
             border-radius: 50%;
-            margin: 0 auto 24px auto;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
             align-items: center;
@@ -571,8 +125,9 @@
             font-size: 48px;
             color: white;
             font-weight: 700;
-            border: 4px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+            margin: 0 auto 20px auto;
+            border: 6px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 12px 40px rgba(102, 126, 234, 0.3);
         }
 
         .profile-name {
@@ -580,74 +135,96 @@
             font-weight: 700;
             color: #1c1c1e;
             margin-bottom: 8px;
-            background: linear-gradient(135deg, #1c1c1e 0%, #4a5568 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
         }
 
-        .profile-email {
-            font-size: 16px;
-            color: #8e8e93;
-            margin-bottom: 24px;
+        .profile-flag {
+            font-size: 28px;
         }
 
         .profile-level {
             display: inline-block;
-            background: linear-gradient(135deg, #ffd700, #ff8c00);
-            color: #1c1c1e;
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 700;
-            margin-bottom: 24px;
-            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
-        }
-
-        .profile-rating {
-            display: inline-block;
-            background: linear-gradient(135deg, #007aff, #0056b3);
-            color: white;
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 700;
-            margin: 0 8px 24px 8px;
-            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
-        }
-
-        .logout-btn {
-            background: linear-gradient(135deg, #ff3b30, #d70015);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 20px;
+            color: white;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .profile-bio {
+            font-size: 16px;
+            color: #8e8e93;
+            margin-bottom: 24px;
+            line-height: 1.5;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .profile-join-date {
+            font-size: 14px;
+            color: #8e8e93;
+            margin-bottom: 24px;
+        }
+
+        .profile-actions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .profile-btn {
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+            transition: all 0.3s ease;
+            border: none;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        .logout-btn:hover {
-            background: linear-gradient(135deg, #d70015, #b50012);
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(215, 0, 21, 0.4);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
         }
 
-        .logout-btn:active {
-            transform: scale(0.98);
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.8);
+            color: #4a5568;
+            border: 2px solid #e5e5ea;
         }
 
-        /* ============= STATS GRID ============= */
+        .btn-secondary:hover {
+            background: #fff;
+            border-color: #d1d1d6;
+            transform: translateY(-1px);
+        }
+
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 24px;
             margin-bottom: 32px;
         }
 
-        .stats-card {
+        .stat-card {
             background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(229, 229, 234, 0.3);
@@ -657,34 +234,36 @@
             transition: transform 0.3s ease;
         }
 
-        .stats-card:hover {
+        .stat-card:hover {
             transform: translateY(-4px);
         }
 
-        .stats-card-title {
-            font-size: 20px;
-            font-weight: 700;
-            color: #1c1c1e;
-            margin-bottom: 24px;
+        .stat-header {
             display: flex;
             align-items: center;
             gap: 12px;
+            margin-bottom: 24px;
         }
 
-        .stats-card-icon {
+        .stat-icon {
             font-size: 24px;
         }
 
-        .stat-item {
+        .stat-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1c1c1e;
+        }
+
+        .stat-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid #f2f2f7;
+            margin-bottom: 16px;
         }
 
-        .stat-item:last-child {
-            border-bottom: none;
+        .stat-row:last-child {
+            margin-bottom: 0;
         }
 
         .stat-label {
@@ -699,32 +278,47 @@
             color: #1c1c1e;
         }
 
-        .stat-value.highlight {
-            color: #007aff;
+        .stat-highlight {
+            background: linear-gradient(135deg, #007aff, #0056b3);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 18px;
         }
 
-        .stat-value.success {
-            color: #28a745;
+        .best-scores {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(229, 229, 234, 0.3);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 32px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
         }
 
-        .stat-value.warning {
-            color: #ffc107;
+        .section-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1c1c1e;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        /* ============= BEST SCORES ============= */
-        .best-scores-grid {
+        .scores-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
+            gap: 20px;
         }
 
         .score-item {
-            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-            border-radius: 12px;
-            padding: 20px;
             text-align: center;
-            transition: all 0.3s ease;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 16px;
             border: 2px solid transparent;
+            transition: all 0.3s ease;
         }
 
         .score-item:hover {
@@ -733,56 +327,69 @@
             box-shadow: 0 8px 25px rgba(0, 122, 255, 0.15);
         }
 
-        .score-difficulty {
-            font-size: 18px;
+        .difficulty-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1c1c1e;
             margin-bottom: 8px;
         }
 
         .score-value {
             font-size: 24px;
-            font-weight: 700;
-            color: #1c1c1e;
+            font-weight: 800;
+            background: linear-gradient(135deg, #007aff, #0056b3);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
-        .score-label {
-            font-size: 12px;
+        .no-score {
             color: #8e8e93;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
+            font-style: italic;
         }
 
-        /* ============= LOADING STATE ============= */
-        .loading-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 400px;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #e5e5ea;
-            border-top: 4px solid #007aff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .loading-text {
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
             color: #8e8e93;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-state-text {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .empty-state-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
             font-size: 16px;
-            font-weight: 500;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
         }
 
-        /* ============= FOOTER ============= */
+        .empty-state-btn:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
         .footer {
             position: fixed;
             bottom: 0;
@@ -804,23 +411,6 @@
             height: 8px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             cursor: pointer;
-            position: relative;
-        }
-
-        .footer-tab::after {
-            content: '⌃';
-            position: absolute;
-            top: -12px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: #4a5568;
-            font-size: 12px;
-            opacity: 0.6;
-            transition: opacity 0.3s ease;
-        }
-
-        .footer:hover .footer-tab::after {
-            opacity: 0;
         }
 
         .footer-content {
@@ -856,14 +446,64 @@
             padding-bottom: 20px;
         }
 
-        /* ============= RESPONSIVE ============= */
+        .private-profile {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .private-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.6;
+        }
+
+        .private-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1c1c1e;
+            margin-bottom: 12px;
+        }
+
+        .private-text {
+            font-size: 16px;
+            color: #8e8e93;
+            line-height: 1.5;
+        }
+
+        .error-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #ff3b30;
+        }
+
+        .error-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.6;
+        }
+
+        .error-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .error-text {
+            font-size: 16px;
+            line-height: 1.5;
+            margin-bottom: 24px;
+        }
+
+        .error-actions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
         @media (max-width: 768px) {
             .header {
                 display: none;
-            }
-
-            .mobile-hamburger {
-                display: flex;
             }
 
             .profile-container {
@@ -879,11 +519,22 @@
                 width: 80px;
                 height: 80px;
                 font-size: 32px;
-                margin-bottom: 16px;
             }
 
             .profile-name {
                 font-size: 24px;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .profile-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .profile-btn {
+                width: 100%;
+                max-width: 200px;
             }
 
             .stats-grid {
@@ -891,12 +542,21 @@
                 gap: 16px;
             }
 
-            .stats-card {
+            .stat-card {
                 padding: 20px;
             }
 
-            .best-scores-grid {
+            .best-scores {
+                padding: 20px;
+            }
+
+            .scores-grid {
                 grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+
+            .score-item {
+                padding: 16px;
             }
         }
 
@@ -909,280 +569,176 @@
                 padding: 20px 16px;
             }
 
-            .stats-card {
-                padding: 16px;
-            }
-
-            .best-scores-grid {
+            .scores-grid {
                 grid-template-columns: 1fr;
             }
-
-            .score-item {
-                padding: 16px;
-            }
-        }
-
-        /* ============= MODE BADGES ============= */
-        .mode-badges {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            margin-bottom: 24px;
-            flex-wrap: wrap;
-        }
-
-        .mode-badge {
-            padding: 6px 16px;
-            border-radius: 16px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .mode-badge.practice {
-            background: linear-gradient(135deg, #34c759, #28a745);
-            color: white;
-        }
-
-        .mode-badge.ranked {
-            background: linear-gradient(135deg, #ff9500, #ff8c00);
-            color: white;
         }
     </style>
 </head>
 <body>
-    <!-- Menu Mobile Overlay -->
-    <div class="mobile-overlay" id="mobile-overlay"></div>
-
-    <!-- Menu Mobile -->
-    <div class="mobile-menu" id="mobile-menu">
-        <div class="mobile-menu-header">
-            <div class="mobile-logo">Suirodoku.com</div>
-            <button class="mobile-close" id="mobile-close">×</button>
-        </div>
-        
-        <div class="mobile-menu-content">
-            <div class="mobile-nav-section">
-                <div class="mobile-section-title">Navigation</div>
-                <button class="mobile-nav-item" onclick="navigateTo('home'); closeMobileMenu();">
-                    🏠 Home
-                </button>
-                <button class="mobile-nav-item" onclick="navigateTo('tutorial'); closeMobileMenu();">
-                    📚 How to Play
-                </button>
-                <button class="mobile-nav-item" onclick="navigateTo('leaderboard'); closeMobileMenu();">
-                    🏆 Leaderboards
-                </button>
-            </div>
-            
-            <!-- Section Account - Dynamique selon l'état de connexion -->
-            <div class="mobile-nav-section" id="mobile-auth-section">
-                <div class="mobile-section-title">Account</div>
-                <!-- Contenu dynamique injecté par JavaScript -->
-            </div>
-            
-            <div class="mobile-nav-section">
-                <div class="mobile-section-title">Legal</div>
-                <button class="mobile-nav-item" onclick="navigateTo('legal'); closeMobileMenu();">
-                    📄 Privacy & Terms
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Mobile Hamburger Button -->
-    <div class="mobile-hamburger" id="mobile-hamburger">
-        <div class="hamburger-line"></div>
-        <div class="hamburger-line"></div>
-        <div class="hamburger-line"></div>
-    </div>
-
-    <!-- Header -->
-    <div class="header">
-        <div class="logo" onclick="goToHome()">Suirodoku.com</div>
-        
-        <!-- Navigation Menu -->
-        <nav class="nav-menu">
-            <button class="nav-btn" onclick="navigateTo('tutorial')">
-                How to Play
-            </button>
-            
-            <button class="nav-btn" onclick="navigateTo('leaderboard')">
-                Leaderboards
-            </button>
-        </nav>
-        
-        <!-- Auth Buttons (Desktop) - Dynamique selon l'état de connexion -->
-        <div class="auth-buttons" id="desktop-auth-buttons">
-            <!-- Contenu dynamique injecté par JavaScript -->
-        </div>
-    </div>
-
     <div class="main-content">
-        <!-- Profile Container -->
+        <div class="header">
+            <div class="logo" onclick="window.goToHome()">Suirodoku.com</div>
+            
+            <nav class="nav-menu">
+                <button class="nav-btn" onclick="window.navigateTo('tutorial')">
+                    How to Play
+                </button>
+                
+                <button class="nav-btn" onclick="window.navigateTo('leaderboard')">
+                    Leaderboards
+                </button>
+            </nav>
+            
+            <div class="auth-buttons" id="desktop-auth-buttons">
+            </div>
+        </div>
+
         <div class="profile-container">
-            <!-- Loading State -->
-            <div class="loading-container" id="loading-container">
-                <div class="spinner"></div>
-                <div class="loading-text">Loading your profile...</div>
+            <div id="loading-container">
             </div>
 
-            <!-- Profile Content (initially hidden) -->
             <div id="profile-content" style="display: none;">
-                <!-- Profile Header -->
                 <div class="profile-header">
                     <div class="profile-avatar" id="profile-avatar">?</div>
-                    <div class="profile-name" id="profile-name">Loading...</div>
-                    <div class="profile-email" id="profile-email">Loading...</div>
-                    
-                    <!-- Mode Badges -->
-                    <div class="mode-badges">
-                        <div class="mode-badge practice">🎯 Practice Player</div>
-                        <div class="mode-badge ranked" id="ranked-badge">🏆 Ranked Player</div>
+                    <div class="profile-name" id="profile-name">
+                        <span id="display-name">Loading...</span>
+                        <span class="profile-flag" id="profile-flag"></span>
                     </div>
+                    <div class="profile-level" id="profile-level">Beginner</div>
+                    <div class="profile-bio" id="profile-bio"></div>
+                    <div class="profile-join-date" id="profile-join-date">Member since...</div>
                     
-                    <div class="profile-level" id="profile-level">🎮 Loading...</div>
-                    <div class="profile-rating" id="profile-rating">⭐ Rating: 1000</div>
-                    
-                    <button class="logout-btn" onclick="handleLogout()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
-                            <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-                        </svg>
-                        Sign Out
-                    </button>
+                    <div class="profile-actions" id="profile-actions">
+                    </div>
                 </div>
 
-                <!-- Stats Grid -->
                 <div class="stats-grid">
-                    <!-- Practice Stats -->
-                    <div class="stats-card">
-                        <div class="stats-card-title">
-                            <span class="stats-card-icon">🎯</span>
-                            Practice Statistics
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-icon">🎮</span>
+                            <span class="stat-title">Game Statistics</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Games Played</span>
-                            <span class="stat-value" id="practice-games">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Games Completed</span>
-                            <span class="stat-value success" id="practice-completed">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Completion Rate</span>
-                            <span class="stat-value highlight" id="practice-completion-rate">0%</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Average Score</span>
-                            <span class="stat-value" id="practice-average-score">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Total Practice Score</span>
-                            <span class="stat-value" id="practice-total-score">0</span>
-                        </div>
-                    </div>
-
-                    <!-- Ranked Stats -->
-                    <div class="stats-card">
-                        <div class="stats-card-title">
-                            <span class="stats-card-icon">🏆</span>
-                            Ranked Statistics
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Games Played</span>
-                            <span class="stat-value" id="ranked-games">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Games Won</span>
-                            <span class="stat-value success" id="ranked-won">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Win Rate</span>
-                            <span class="stat-value highlight" id="ranked-win-rate">0%</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Current Rating</span>
-                            <span class="stat-value warning" id="ranked-current-rating">1000</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Peak Rating</span>
-                            <span class="stat-value highlight" id="ranked-peak-rating">1000</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Win Streak</span>
-                            <span class="stat-value" id="ranked-win-streak">0</span>
-                        </div>
-                    </div>
-
-                    <!-- General Stats -->
-                    <div class="stats-card">
-                        <div class="stats-card-title">
-                            <span class="stats-card-icon">📊</span>
-                            Overall Statistics
-                        </div>
-                        <div class="stat-item">
+                        <div class="stat-row">
                             <span class="stat-label">Total Games</span>
                             <span class="stat-value" id="total-games">0</span>
                         </div>
-                        <div class="stat-item">
+                        <div class="stat-row">
+                            <span class="stat-label">Games Won</span>
+                            <span class="stat-value" id="games-won">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Win Rate</span>
+                            <span class="stat-value" id="win-rate">0%</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Average Score</span>
+                            <span class="stat-value stat-highlight" id="avg-score">0</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-icon">⏱️</span>
+                            <span class="stat-title">Performance</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Average Time</span>
+                            <span class="stat-value" id="avg-time">0:00</span>
+                        </div>
+                        <div class="stat-row">
                             <span class="stat-label">Total Time Played</span>
                             <span class="stat-value" id="total-time">0h 0m</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Player Level</span>
-                            <span class="stat-value warning" id="player-level-display">Novice</span>
+                        <div class="stat-row">
+                            <span class="stat-label">Current Performance</span>
+                            <span class="stat-value stat-highlight" id="performance">0%</span>
                         </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Member Since</span>
-                            <span class="stat-value" id="member-since">Recently</span>
-                        </div>
-                        <div class="stat-item">
+                        <div class="stat-row">
                             <span class="stat-label">Last Played</span>
                             <span class="stat-value" id="last-played">Never</span>
                         </div>
                     </div>
 
-                    <!-- Best Scores by Difficulty -->
-                    <div class="stats-card" style="grid-column: 1 / -1;">
-                        <div class="stats-card-title">
-                            <span class="stats-card-icon">🎖️</span>
-                            Best Practice Scores by Difficulty
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-icon">🏆</span>
+                            <span class="stat-title">Game Modes</span>
                         </div>
-                        <div class="best-scores-grid">
-                            <div class="score-item">
-                                <div class="score-difficulty">🟢 Easy</div>
-                                <div class="score-label">Best Score</div>
-                                <div class="score-value" id="best-easy">0</div>
-                            </div>
-                            <div class="score-item">
-                                <div class="score-difficulty">🟡 Medium</div>
-                                <div class="score-label">Best Score</div>
-                                <div class="score-value" id="best-medium">0</div>
-                            </div>
-                            <div class="score-item">
-                                <div class="score-difficulty">🟠 Hard</div>
-                                <div class="score-label">Best Score</div>
-                                <div class="score-value" id="best-hard">0</div>
-                            </div>
-                            <div class="score-item">
-                                <div class="score-difficulty">🔴 Expert</div>
-                                <div class="score-label">Best Score</div>
-                                <div class="score-value" id="best-expert">0</div>
-                            </div>
-                            <div class="score-item">
-                                <div class="score-difficulty">⚫ Master</div>
-                                <div class="score-label">Best Score</div>
-                                <div class="score-value" id="best-master">0</div>
-                            </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Practice Games</span>
+                            <span class="stat-value" id="practice-games">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Ranked Games</span>
+                            <span class="stat-value" id="ranked-games">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Current Level</span>
+                            <span class="stat-value stat-highlight" id="current-level">Beginner</span>
                         </div>
                     </div>
+                </div>
+
+                <div class="best-scores">
+                    <h2 class="section-title">
+                        <span class="stat-icon">🌟</span>
+                        Best Scores by Difficulty
+                    </h2>
+                    <div class="scores-grid">
+                        <div class="score-item">
+                            <div class="difficulty-name">🟢 Easy</div>
+                            <div class="score-value" id="score-easy">-</div>
+                        </div>
+                        <div class="score-item">
+                            <div class="difficulty-name">🟡 Medium</div>
+                            <div class="score-value" id="score-medium">-</div>
+                        </div>
+                        <div class="score-item">
+                            <div class="difficulty-name">🟠 Hard</div>
+                            <div class="score-value" id="score-hard">-</div>
+                        </div>
+                        <div class="score-item">
+                            <div class="difficulty-name">🔴 Expert</div>
+                            <div class="score-value" id="score-expert">-</div>
+                        </div>
+                        <div class="score-item">
+                            <div class="difficulty-name">⚫ Master</div>
+                            <div class="score-value" id="score-master">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="empty-state" id="empty-state" style="display: none;">
+                <div class="empty-state-icon">👤</div>
+                <div class="empty-state-title">No Profile Data</div>
+                <div class="empty-state-text">This user hasn't played any games yet or their profile is incomplete.</div>
+                <button class="empty-state-btn" onclick="window.navigateTo('home')">Start Playing</button>
+            </div>
+
+            <div class="private-profile" id="private-profile" style="display: none;">
+                <div class="private-icon">🔒</div>
+                <div class="private-title">Private Profile</div>
+                <div class="private-text">This user has set their profile to private.</div>
+            </div>
+
+            <div class="error-state" id="error-state" style="display: none;">
+                <div class="error-icon">❌</div>
+                <div class="error-title">Profile Not Found</div>
+                <div class="error-text" id="error-text">The requested profile could not be found or an error occurred.</div>
+                <div class="error-actions">
+                    <button class="profile-btn btn-secondary" onclick="ProfileManager.goBack()">
+                        ← Go Back
+                    </button>
+                    <button class="profile-btn btn-primary" onclick="window.navigateTo('leaderboard')">
+                        🏆 Browse Leaderboard
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Footer -->
     <footer class="footer">
         <div class="footer-tab"></div>
         <div class="footer-content">
@@ -1191,369 +747,450 @@
                     © 2024 Suirodoku.com. All rights reserved.
                 </div>
                 <div class="footer-legal">
-                    <a onclick="navigateTo('legal')">Privacy Policy</a>
-                    <a onclick="navigateTo('legal')">Terms of Service</a>
-                    <a onclick="navigateTo('legal')">Contact</a>
+                    <a onclick="window.navigateTo('legal')">Privacy Policy</a>
+                    <a onclick="window.navigateTo('legal')">Terms of Service</a>
+                    <a onclick="window.navigateTo('legal')">Contact</a>
                 </div>
             </div>
         </div>
     </footer>
 
+    <script src="../shared/firebase-manager.js"></script>
+    <script src="../shared/auth-utils.js"></script>
+    <script src="../shared/auth-header.js"></script>
+    <script src="../mobile/menu.js"></script>
+    
     <script>
-        // ============= GLOBAL VARIABLES =============
-        let currentUser = null;
-        let userStats = null;
-
-        // ============= FIREBASE FUNCTIONS =============
-        function initializeProfileAuth() {
-            if (typeof window.firebaseAuth === 'undefined') {
-                setTimeout(initializeProfileAuth, 100);
-                return;
-            }
-
-            const { auth, onAuthStateChanged } = window.firebaseAuth;
-
-            onAuthStateChanged(auth, (user) => {
-                currentUser = user;
-                if (user) {
-                    console.log('User authenticated:', user.email);
-                    loadUserProfile(user);
-                    updateHeaderAuthState(user);
-                } else {
-                    console.log('User not authenticated, redirecting...');
-                    window.location.href = '../auth/';
-                }
-            });
-        }
-
-        // ============= GESTION DYNAMIQUE DU HEADER - CORRIGÉ =============
-        async function updateHeaderAuthState(user) {
-            const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
-            const mobileAuthSection = document.getElementById('mobile-auth-section');
+        const ProfileManager = {
+            currentUser: null,
+            profileData: null,
+            targetUserId: null,
+            isOwnProfile: false,
+            isLoading: false,
+            profileCache: new Map(),
             
-            if (user) {
+            init: function() {
                 try {
-                    const userData = await getUserData(user);
-                    const displayName = getDisplayName(userData);
-                    const flag = userData.profile?.nationality ? getFlagEmoji(userData.profile.nationality) : '';
+                    this.setupAuthentication();
+                    this.parseURLParameters();
+                } catch (error) {
+                    console.error('Error initializing ProfileManager:', error);
+                    this.showError('Failed to initialize profile page');
+                }
+            },
+
+            setupAuthentication: function() {
+                const waitForFirebase = () => {
+                    if (typeof window.FirebaseManager !== 'undefined') {
+                        this.initFirebaseAuth();
+                    } else {
+                        setTimeout(waitForFirebase, 100);
+                    }
+                };
+                waitForFirebase();
+            },
+
+            initFirebaseAuth: function() {
+                try {
+                    window.FirebaseManager.onAuthStateChanged((user, userData) => {
+                        this.currentUser = user;
+                        
+                        if (typeof window.AuthHeader !== 'undefined' && window.AuthHeader.updateAuthState) {
+                            window.AuthHeader.updateAuthState(user, userData);
+                        }
+                        
+                        this.determineProfileToShow();
+                    });
+                } catch (error) {
+                    console.error('Error initFirebaseAuth:', error);
+                    this.showError('Authentication error');
+                }
+            },
+
+            parseURLParameters: function() {
+                try {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const playerParam = urlParams.get('player');
                     
-                    if (desktopAuthButtons) {
-                        desktopAuthButtons.innerHTML = `
-                            <div class="user-menu">
-                                <div class="user-name">
-                                    <span class="user-flag">${flag}</span>
-                                    <span>${displayName}</span>
-                                </div>
-                                <div class="dropdown-menu">
-                                    <a href="../profile/">👤 My Profile</a>
-                                    <a href="../stats/">📊 My Statistics</a>
-                                    <a href="../settings/">⚙️ Settings</a>
-                                    <a href="#" onclick="signOutUser()">🚪 Sign Out</a>
-                                </div>
-                            </div>
-                        `;
+                    if (playerParam) {
+                        this.targetUserId = this.sanitizeUserId(playerParam);
+                        this.isOwnProfile = false;
+                    } else {
+                        this.targetUserId = null;
+                        this.isOwnProfile = true;
+                    }
+                } catch (error) {
+                    console.error('Error parseURLParameters:', error);
+                    this.targetUserId = null;
+                    this.isOwnProfile = true;
+                }
+            },
+
+            sanitizeUserId: function(userId) {
+                if (!userId || typeof userId !== 'string') return null;
+                const sanitized = userId.replace(/[<>\"'&\x00-\x1f\x7f-\x9f]/g, '');
+                if (sanitized.length < 3 || sanitized.length > 128) return null;
+                return sanitized;
+            },
+
+            determineProfileToShow: function() {
+                try {
+                    if (this.targetUserId) {
+                        this.isOwnProfile = this.currentUser && this.currentUser.uid === this.targetUserId;
+                        this.loadPlayerProfile(this.targetUserId);
+                    } else if (this.currentUser) {
+                        this.targetUserId = this.currentUser.uid;
+                        this.isOwnProfile = true;
+                        this.loadPlayerProfile(this.currentUser.uid);
+                    } else {
+                        this.redirectToAuth();
+                    }
+                } catch (error) {
+                    console.error('Error determineProfileToShow:', error);
+                    this.showError('Error determining profile to display');
+                }
+            },
+
+            loadPlayerProfile: async function(userId) {
+                if (this.isLoading) return;
+                
+                this.isLoading = true;
+                
+                try {
+                    window.LoadingManager.show(document.getElementById('loading-container'), 'Loading profile...');
+                    
+                    if (this.profileCache.has(userId)) {
+                        const cached = this.profileCache.get(userId);
+                        const cacheAge = Date.now() - cached.timestamp;
+                        
+                        if (cacheAge < 5 * 60 * 1000) {
+                            this.handleProfileData(cached.data);
+                            return;
+                        }
                     }
                     
-                    if (mobileAuthSection) {
-                        mobileAuthSection.innerHTML = `
-                            <div class="mobile-section-title">Account</div>
-                            <button class="mobile-nav-item" onclick="navigateTo('profile'); closeMobileMenu();">
-                                👤 My Profile
+                    const profileData = await this.fetchUserProfile(userId);
+                    
+                    if (!profileData) {
+                        this.showError('Profile not found');
+                        return;
+                    }
+
+                    this.profileCache.set(userId, {
+                        data: profileData,
+                        timestamp: Date.now()
+                    });
+
+                    this.handleProfileData(profileData);
+                    
+                } catch (error) {
+                    console.error('Error loadPlayerProfile:', error);
+                    this.showError('Failed to load profile');
+                } finally {
+                    this.isLoading = false;
+                }
+            },
+
+            fetchUserProfile: async function(userId) {
+                try {
+                    if (window.AuthUtils && window.AuthUtils.getUserData) {
+                        return await window.AuthUtils.getUserData({ uid: userId });
+                    }
+                    
+                    if (typeof window.getUserData === 'function') {
+                        return await window.getUserData({ uid: userId });
+                    }
+                    
+                    if (window.FirebaseManager && window.FirebaseManager.firebaseAuth && window.FirebaseManager.db) {
+                        const userRef = window.FirebaseManager.firebaseAuth.doc(window.FirebaseManager.db, 'users', userId);
+                        const userDoc = await window.FirebaseManager.firebaseAuth.getDoc(userRef);
+                        
+                        if (userDoc.exists()) {
+                            return { uid: userId, ...userDoc.data() };
+                        }
+                    }
+                    
+                    return null;
+                } catch (error) {
+                    console.error('Error fetchUserProfile:', error);
+                    throw new Error('Failed to fetch user profile');
+                }
+            },
+
+            handleProfileData: function(profileData) {
+                try {
+                    this.profileData = profileData;
+
+                    if (!this.isOwnProfile && profileData.privacy?.profileVisibility === 'private') {
+                        this.showPrivateProfile();
+                        return;
+                    }
+
+                    this.displayProfile(profileData);
+                    
+                    window.LoadingManager.hide(document.getElementById('loading-container'));
+                    document.getElementById('profile-content').style.display = 'block';
+                } catch (error) {
+                    console.error('Error handleProfileData:', error);
+                    this.showError('Error displaying profile');
+                }
+            },
+
+            displayProfile: function(userData) {
+                try {
+                    const displayName = window.FirebaseManager.getDisplayName(userData);
+                    const avatarInitial = displayName.charAt(0).toUpperCase();
+                    
+                    document.getElementById('profile-avatar').textContent = avatarInitial;
+                    document.getElementById('display-name').textContent = displayName;
+                    
+                    const flagElement = document.getElementById('profile-flag');
+                    if (userData.profile?.nationality) {
+                        const flagEmoji = window.FirebaseManager.getFlagEmoji(userData.profile.nationality);
+                        flagElement.textContent = flagEmoji;
+                        flagElement.style.display = 'inline';
+                    } else {
+                        flagElement.style.display = 'none';
+                    }
+
+                    const level = userData.gameStats?.level || 'Beginner';
+                    const levelElement = document.getElementById('profile-level');
+                    levelElement.textContent = level;
+                    levelElement.style.background = this.getLevelColor(level);
+
+                    const bioElement = document.getElementById('profile-bio');
+                    if (userData.profile?.bio) {
+                        bioElement.textContent = userData.profile.bio;
+                        bioElement.style.display = 'block';
+                    } else {
+                        bioElement.style.display = 'none';
+                    }
+
+                    this.displayJoinDate(userData);
+                    this.displayProfileActions();
+                    this.displayStats(userData.gameStats || {});
+                    this.displayBestScores(userData.gameStats?.bestScores || {});
+                    
+                } catch (error) {
+                    console.error('Error displayProfile:', error);
+                }
+            },
+
+            displayJoinDate: function(userData) {
+                try {
+                    const joinDateElement = document.getElementById('profile-join-date');
+                    const joinDate = userData.profile?.joinDate || userData.createdAt;
+                    
+                    if (joinDate) {
+                        const date = joinDate.toDate ? joinDate.toDate() : new Date(joinDate);
+                        const formattedDate = date.toLocaleDateString('en-US', { 
+                            month: 'long', 
+                            year: 'numeric' 
+                        });
+                        joinDateElement.textContent = `Member since ${formattedDate}`;
+                    } else {
+                        joinDateElement.textContent = 'Member since unknown';
+                    }
+                } catch (error) {
+                    console.error('Error displayJoinDate:', error);
+                    document.getElementById('profile-join-date').textContent = 'Member since unknown';
+                }
+            },
+
+            displayProfileActions: function() {
+                try {
+                    const actionsContainer = document.getElementById('profile-actions');
+                    
+                    if (this.isOwnProfile) {
+                        actionsContainer.innerHTML = `
+                            <button class="profile-btn btn-primary" onclick="window.navigateTo('settings')">
+                                ⚙️ Edit Profile
                             </button>
-                            <button class="mobile-nav-item" onclick="navigateTo('stats'); closeMobileMenu();">
-                                📊 My Statistics
+                            <button class="profile-btn btn-secondary" onclick="window.navigateTo('home')">
+                                🎮 Play Game
                             </button>
-                            <button class="mobile-nav-item" onclick="navigateTo('settings'); closeMobileMenu();">
-                                ⚙️ Settings
+                        `;
+                    } else {
+                        actionsContainer.innerHTML = `
+                            <button class="profile-btn btn-secondary" onclick="ProfileManager.goBack()">
+                                ← Back
                             </button>
-                            <button class="mobile-nav-item logout" onclick="handleLogout(); closeMobileMenu();">
-                                🚪 Sign Out
+                            <button class="profile-btn btn-primary" onclick="window.navigateTo('home')">
+                                🎮 Play Game
                             </button>
                         `;
                     }
                 } catch (error) {
-                    console.error('Error updating header:', error);
-                    if (desktopAuthButtons) {
-                        desktopAuthButtons.innerHTML = `<button class="auth-btn login-btn" onclick="signOutUser()">Sign Out</button>`;
+                    console.error('Error displayProfileActions:', error);
+                }
+            },
+
+            displayStats: function(gameStats) {
+                try {
+                    document.getElementById('total-games').textContent = gameStats.totalGamesPlayed || 0;
+                    document.getElementById('games-won').textContent = gameStats.totalGamesWon || 0;
+                    
+                    const winRate = gameStats.totalGamesPlayed > 0 ? 
+                        Math.round((gameStats.totalGamesWon / gameStats.totalGamesPlayed) * 100) : 0;
+                    document.getElementById('win-rate').textContent = `${winRate}%`;
+                    
+                    document.getElementById('avg-score').textContent = this.formatNumber(gameStats.averageScore || 0);
+                    document.getElementById('avg-time').textContent = this.formatTime(gameStats.averageTime || 0);
+                    document.getElementById('total-time').textContent = this.formatTotalTime(gameStats.totalTimeSpent || 0);
+                    document.getElementById('performance').textContent = `${Math.round(gameStats.currentPerformance || 0)}%`;
+                    
+                    document.getElementById('practice-games').textContent = gameStats.practiceGames || 0;
+                    document.getElementById('ranked-games').textContent = gameStats.rankedGames || 0;
+                    document.getElementById('current-level').textContent = gameStats.level || 'Beginner';
+                    
+                    this.displayLastPlayed(gameStats.lastPlayed);
+                } catch (error) {
+                    console.error('Error displayStats:', error);
+                }
+            },
+
+            displayLastPlayed: function(lastPlayed) {
+                try {
+                    const lastPlayedElement = document.getElementById('last-played');
+                    
+                    if (lastPlayed) {
+                        const date = lastPlayed.toDate ? lastPlayed.toDate() : new Date(lastPlayed);
+                        lastPlayedElement.textContent = this.formatRelativeTime(date);
+                    } else {
+                        lastPlayedElement.textContent = 'Never';
                     }
+                } catch (error) {
+                    console.error('Error displayLastPlayed:', error);
+                    document.getElementById('last-played').textContent = 'Unknown';
                 }
-            } else {
-                if (desktopAuthButtons) {
-                    desktopAuthButtons.innerHTML = `<button class="auth-btn login-btn" onclick="navigateTo('auth')">Log In</button>`;
-                }
-                if (mobileAuthSection) {
-                    mobileAuthSection.innerHTML = `
-                        <div class="mobile-section-title">Account</div>
-                        <button class="mobile-nav-item" onclick="navigateTo('auth'); closeMobileMenu();">Log In</button>
-                    `;
-                }
-            }
-        }
+            },
 
-        // Fonction de déconnexion - RENFORCÉE
-        window.signOutUser = async function() {
-            const confirmed = confirm('Are you sure you want to sign out?');
-            if (!confirmed) return;
+            displayBestScores: function(bestScores) {
+                try {
+                    const difficulties = ['easy', 'medium', 'hard', 'expert', 'master'];
+                    
+                    difficulties.forEach(difficulty => {
+                        const scoreElement = document.getElementById(`score-${difficulty}`);
+                        const score = bestScores[difficulty];
+                        
+                        if (score && score > 0) {
+                            scoreElement.textContent = this.formatNumber(score);
+                            scoreElement.classList.remove('no-score');
+                        } else {
+                            scoreElement.textContent = 'No score';
+                            scoreElement.classList.add('no-score');
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error displayBestScores:', error);
+                }
+            },
 
-            try {
-                const { auth, signOut } = window.firebaseAuth;
-                await signOut(auth);
-                console.log('✅ User signed out successfully');
-                window.location.href = '../';
-            } catch (error) {
-                console.error('❌ Error signing out:', error);
-                alert('Error signing out. Please try again.');
+            showPrivateProfile: function() {
+                window.LoadingManager.hide(document.getElementById('loading-container'));
+                document.getElementById('private-profile').style.display = 'block';
+            },
+
+            showError: function(message, details = null) {
+                window.LoadingManager.hide(document.getElementById('loading-container'));
+                
+                const errorElement = document.getElementById('error-state');
+                const errorTextElement = document.getElementById('error-text');
+                
+                if (errorTextElement) {
+                    errorTextElement.textContent = details || message;
+                }
+                
+                errorElement.style.display = 'block';
+            },
+
+            goBack: function() {
+                try {
+                    if (document.referrer && this.isSafeReferrer(document.referrer)) {
+                        window.history.back();
+                    } else {
+                        window.navigateTo('leaderboard');
+                    }
+                } catch (error) {
+                    console.error('Error goBack:', error);
+                    window.navigateTo('leaderboard');
+                }
+            },
+
+            isSafeReferrer: function(referrer) {
+                try {
+                    const referrerUrl = new URL(referrer);
+                    const currentUrl = new URL(window.location.href);
+                    return referrerUrl.origin === currentUrl.origin;
+                } catch (error) {
+                    return false;
+                }
+            },
+
+            redirectToAuth: function() {
+                setTimeout(() => {
+                    window.navigateTo('auth');
+                }, 1000);
+            },
+
+            getLevelColor: function(level) {
+                const colors = {
+                    'Beginner': 'linear-gradient(135deg, #8e8e93, #6d6d70)',
+                    'Novice': 'linear-gradient(135deg, #34c759, #28a745)',
+                    'Intermediate': 'linear-gradient(135deg, #007aff, #0056b3)',
+                    'Advanced': 'linear-gradient(135deg, #af52de, #8e44ad)',
+                    'Expert': 'linear-gradient(135deg, #ff9500, #e67e22)',
+                    'Master': 'linear-gradient(135deg, #ff3b30, #e74c3c)',
+                    'Legend': 'linear-gradient(135deg, #ffd700, #f39c12)'
+                };
+                return colors[level] || colors['Beginner'];
+            },
+
+            formatNumber: function(num) {
+                if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+                if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+                return num.toString();
+            },
+
+            formatTime: function(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            },
+
+            formatTotalTime: function(seconds) {
+                const hours = Math.floor(seconds / 3600);
+                const mins = Math.floor((seconds % 3600) / 60);
+                return `${hours}h ${mins}m`;
+            },
+
+            formatRelativeTime: function(date) {
+                try {
+                    const now = new Date();
+                    const diffMs = now - date;
+                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDays === 0) return 'Today';
+                    if (diffDays === 1) return 'Yesterday';
+                    if (diffDays < 7) return `${diffDays} days ago`;
+                    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+                    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+                    return `${Math.floor(diffDays / 365)} years ago`;
+                } catch (error) {
+                    return 'Unknown';
+                }
             }
         };
 
-        // ============= LOAD USER PROFILE - AMÉLIORÉ =============
-        async function loadUserProfile(user) {
-            try {
-                const userData = await getUserData(user);
-                userStats = userData.improvedStats || getDefaultStats();
-                updateProfileUI(userData, userStats);
-
-                document.getElementById('loading-container').style.display = 'none';
-                document.getElementById('profile-content').style.display = 'block';
-
-            } catch (error) {
-                console.error('Error loading user profile:', error);
-                showError('Failed to load profile data. Please try again.');
-            }
-        }
-
-        function getDefaultStats() {
-            return {
-                totalGames: 0,
-                totalPlayTime: 0,
-                practice: {
-                    gamesPlayed: 0,
-                    gamesCompleted: 0,
-                    totalScore: 0,
-                    bestScores: {
-                        easy: 0,
-                        medium: 0,
-                        hard: 0,
-                        expert: 0,
-                        master: 0
-                    }
-                },
-                ranked: {
-                    gamesPlayed: 0,
-                    gamesCompleted: 0,
-                    currentRating: 1000,
-                    peakRating: 1000,
-                    winStreak: 0
-                }
-            };
-        }
-
-        // ============= UPDATE PROFILE UI - CORRIGÉ =============
-        function updateProfileUI(userData, stats) {
-            // Profile Header
-            const displayName = getDisplayName(userData) || 'Anonymous Player';
-            const email = userData.email || 'No email';
-            const avatarInitial = displayName.charAt(0).toUpperCase();
-
-            document.getElementById('profile-avatar').textContent = avatarInitial;
-            document.getElementById('profile-name').textContent = displayName;
-            document.getElementById('profile-email').textContent = email;
-
-            // Level and Rating
-            const level = getPlayerLevel(stats.ranked.currentRating);
-            document.getElementById('profile-level').textContent = `🎮 ${level.name}`;
-            document.getElementById('profile-rating').textContent = `⭐ Rating: ${stats.ranked.currentRating}`;
-            document.getElementById('profile-rating').style.background = `linear-gradient(135deg, ${level.color}, ${level.color}cc)`;
-
-            // Practice Stats
-            const practiceCompletionRate = stats.practice.gamesPlayed > 0 ? 
-                Math.round((stats.practice.gamesCompleted / stats.practice.gamesPlayed) * 100) : 0;
-            const practiceAverage = stats.practice.gamesCompleted > 0 ? 
-                Math.round(stats.practice.totalScore / stats.practice.gamesCompleted) : 0;
-
-            document.getElementById('practice-games').textContent = stats.practice.gamesPlayed.toLocaleString();
-            document.getElementById('practice-completed').textContent = stats.practice.gamesCompleted.toLocaleString();
-            document.getElementById('practice-completion-rate').textContent = `${practiceCompletionRate}%`;
-            document.getElementById('practice-average-score').textContent = practiceAverage.toLocaleString();
-            document.getElementById('practice-total-score').textContent = stats.practice.totalScore.toLocaleString();
-
-            // Ranked Stats
-            const rankedWinRate = stats.ranked.gamesPlayed > 0 ? 
-                Math.round((stats.ranked.gamesCompleted / stats.ranked.gamesPlayed) * 100) : 0;
-
-            document.getElementById('ranked-games').textContent = stats.ranked.gamesPlayed.toLocaleString();
-            document.getElementById('ranked-won').textContent = stats.ranked.gamesCompleted.toLocaleString();
-            document.getElementById('ranked-win-rate').textContent = `${rankedWinRate}%`;
-            document.getElementById('ranked-current-rating').textContent = stats.ranked.currentRating.toLocaleString();
-            document.getElementById('ranked-peak-rating').textContent = stats.ranked.peakRating.toLocaleString();
-            document.getElementById('ranked-win-streak').textContent = stats.ranked.winStreak.toLocaleString();
-
-            // General Stats
-            const totalHours = Math.floor((stats.totalPlayTime || 0) / 3600);
-            const totalMinutes = Math.floor(((stats.totalPlayTime || 0) % 3600) / 60);
-
-            document.getElementById('total-games').textContent = stats.totalGames.toLocaleString();
-            document.getElementById('total-time').textContent = `${totalHours}h ${totalMinutes}m`;
-            document.getElementById('player-level-display').textContent = level.name;
-            
-            // Member since - CORRIGÉ
-            const joinDate = userData.profile?.joinDate || userData.metadata?.creationTime;
-            if (joinDate) {
-                const date = joinDate instanceof Date ? joinDate : new Date(joinDate);
-                document.getElementById('member-since').textContent = date.toLocaleDateString();
-            } else {
-                document.getElementById('member-since').textContent = 'Recently';
-            }
-            
-            document.getElementById('last-played').textContent = 'Check game history';
-
-            // Best Scores
-            const bestScores = stats.practice.bestScores || {};
-            document.getElementById('best-easy').textContent = (bestScores.easy || 0).toLocaleString();
-            document.getElementById('best-medium').textContent = (bestScores.medium || 0).toLocaleString();
-            document.getElementById('best-hard').textContent = (bestScores.hard || 0).toLocaleString();
-            document.getElementById('best-expert').textContent = (bestScores.expert || 0).toLocaleString();
-            document.getElementById('best-master').textContent = (bestScores.master || 0).toLocaleString();
-
-            // Show/hide ranked badge based on activity
-            const rankedBadge = document.getElementById('ranked-badge');
-            if (stats.ranked.gamesPlayed === 0) {
-                rankedBadge.style.opacity = '0.5';
-                rankedBadge.textContent = '🏆 Try Ranked Mode';
-            } else {
-                rankedBadge.style.opacity = '1';
-                rankedBadge.textContent = '🏆 Ranked Player';
-            }
-        }
-
-        async function handleLogout() {
-            const confirmed = confirm('Are you sure you want to sign out?');
-            if (!confirmed) return;
-
-            try {
-                const { auth, signOut } = window.firebaseAuth;
-                await signOut(auth);
-                console.log('User signed out successfully');
-                window.location.href = '../';
-            } catch (error) {
-                console.error('Error signing out:', error);
-                alert('Failed to sign out. Please try again.');
-            }
-        }
-
-        function showError(message) {
-            document.getElementById('loading-container').innerHTML = `
-                <div style="text-align: center; color: #ff3b30;">
-                    <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
-                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Error</div>
-                    <div style="font-size: 14px; color: #8e8e93;">${message}</div>
-                    <button onclick="location.reload()" style="
-                        margin-top: 20px;
-                        padding: 12px 24px;
-                        background: #007aff;
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        font-weight: 600;
-                        cursor: pointer;
-                    ">Retry</button>
-                </div>
-            `;
-        }
-
-        // ============= NAVIGATION FUNCTIONS =============
-        function navigateTo(page) {
-            switch(page) {
-                case 'home':
-                    window.location.href = '../';
-                    break;
-                case 'profile':
-                    window.location.href = '../profile/';
-                    break;
-                case 'stats':
-                    window.location.href = '../stats/';
-                    break;
-                case 'settings':
-                    window.location.href = '../settings/';
-                    break;
-                case 'auth':
-                    window.location.href = '../auth/';
-                    break;
-                case 'tutorial':
-                    window.location.href = '../tutorial/';
-                    break;
-                case 'leaderboard':
-                    window.location.href = '../leaderboard/';
-                    break;
-                case 'legal':
-                    window.location.href = '../legal/';
-                    break;
-                default:
-                    console.log('Navigate to:', page);
-            }
-        }
-
-        function goToHome() {
-            window.location.href = '../';
-        }
-
-        // ============= MENU MOBILE =============
-        function openMobileMenu() {
-            const overlay = document.getElementById('mobile-overlay');
-            const menu = document.getElementById('mobile-menu');
-            const hamburger = document.getElementById('mobile-hamburger');
-            
-            overlay.classList.add('show');
-            menu.classList.add('show');
-            hamburger.classList.add('active');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeMobileMenu() {
-            const overlay = document.getElementById('mobile-overlay');
-            const menu = document.getElementById('mobile-menu');
-            const hamburger = document.getElementById('mobile-hamburger');
-            
-            overlay.classList.remove('show');
-            menu.classList.remove('show');
-            hamburger.classList.remove('active');
-            document.body.style.overflow = '';
-        }
-
-        // ============= INITIALIZATION =============
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize Firebase Auth
-            initializeProfileAuth();
-
-            // Mobile menu handlers
-            const mobileHamburger = document.getElementById('mobile-hamburger');
-            const mobileOverlay = document.getElementById('mobile-overlay');
-            const mobileClose = document.getElementById('mobile-close');
-            
-            if (mobileHamburger) {
-                mobileHamburger.addEventListener('click', function() {
-                    if (this.classList.contains('active')) {
-                        closeMobileMenu();
-                    } else {
-                        openMobileMenu();
-                    }
-                });
-            }
-            
-            if (mobileOverlay) {
-                mobileOverlay.addEventListener('click', closeMobileMenu);
-            }
-            
-            if (mobileClose) {
-                mobileClose.addEventListener('click', closeMobileMenu);
+            try {
+                ProfileManager.init();
+            } catch (error) {
+                console.error('Error initializing Profile page:', error);
             }
         });
 
-        // ============= DEBUG ET TEST =============
-        console.log('🧪 Testing Firebase Integration...');
-        console.log('Auth:', window.firebaseAuth?.auth ? '✅' : '❌');
-        console.log('DB:', window.firebaseAuth?.db ? '✅' : '❌');
-        console.log('Functions:', Object.keys(window.firebaseAuth || {}));
+        window.ProfileManager = ProfileManager;
     </script>
 </body>
 </html>

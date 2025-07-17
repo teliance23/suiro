@@ -1,0 +1,1655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboards | Suirodoku.com</title>
+    
+    <!-- FAVICON -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ============= RESET AND BASE ============= */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            caret-color: transparent;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+            background-color: #f2f2f7;
+            color: #000;
+            line-height: 1;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ============= DYNAMIC HEADER STYLES ============= */
+        .user-menu {
+            position: relative;
+            display: inline-block;
+        }
+
+        .user-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #4a5568;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .user-name:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #2d3748;
+        }
+
+        .user-name::after {
+            content: '▼';
+            font-size: 10px;
+            transition: transform 0.3s ease;
+        }
+
+        .user-menu:hover .user-name::after {
+            transform: rotate(180deg);
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border: 1px solid rgba(229, 229, 234, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .user-menu:hover .dropdown-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-menu a {
+            display: block;
+            padding: 14px 20px;
+            color: #1c1c1e;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border-bottom: 1px solid rgba(229, 229, 234, 0.3);
+        }
+
+        .dropdown-menu a:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-menu a:hover {
+            background: rgba(0, 122, 255, 0.05);
+            color: #007aff;
+        }
+
+        .dropdown-menu a:first-child {
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+        }
+
+        .dropdown-menu a:last-child {
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+        }
+
+        .user-flag {
+            font-size: 16px;
+            margin-right: 4px;
+        }
+
+        /* ============= HEADER ============= */
+        .header {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 16px 24px 20px 24px;
+            background-color: #fff;
+            position: relative;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            color: #4a5568;
+            letter-spacing: -0.8px;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-314px);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+
+        .logo:hover {
+            color: #2d3748;
+            background-color: rgba(74, 85, 104, 0.05);
+            transform: translateX(-314px) scale(1.02);
+        }
+
+        .nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: absolute;
+            left: 50%;
+            transform: translateX(40px);
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: 2px solid #e2e8f0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #4a5568;
+            cursor: pointer;
+            padding: 10px 20px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .nav-btn:hover {
+            background-color: #f7fafc;
+            border-color: #cbd5e0;
+            color: #2d3748;
+        }
+
+        .nav-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .auth-buttons {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .auth-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .auth-btn:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        /* ============= MOBILE HAMBURGER ============= */
+        .mobile-hamburger {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 48px;
+            height: 48px;
+            background: white;
+            border: 1px solid #e5e5ea;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            gap: 4px;
+        }
+
+        .mobile-hamburger:hover {
+            background-color: #f8f9fa;
+            transform: scale(1.05);
+        }
+
+        .hamburger-line {
+            width: 20px;
+            height: 2px;
+            background-color: #4a5568;
+            border-radius: 1px;
+            transition: all 0.3s ease;
+        }
+
+        .mobile-hamburger.active .hamburger-line:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+
+        .mobile-hamburger.active .hamburger-line:nth-child(2) {
+            opacity: 0;
+        }
+
+        .mobile-hamburger.active .hamburger-line:nth-child(3) {
+            transform: rotate(-45deg) translate(7px, -6px);
+        }
+
+        .mobile-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 2000;
+            backdrop-filter: blur(5px);
+        }
+
+        .mobile-overlay.show {
+            display: block;
+        }
+
+        .mobile-menu {
+            position: fixed;
+            top: 0;
+            right: -300px;
+            width: 300px;
+            height: 100%;
+            background: white;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+            z-index: 2001;
+            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+        }
+
+        .mobile-menu.show {
+            right: 0;
+        }
+
+        .mobile-menu-header {
+            padding: 0 20px 20px 20px;
+            border-bottom: 1px solid #e5e5ea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .mobile-logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #4a5568;
+            letter-spacing: -0.6px;
+        }
+
+        .mobile-close {
+            width: 32px;
+            height: 32px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: background-color 0.2s ease;
+        }
+
+        .mobile-close:hover {
+            background-color: #f5f5f5;
+        }
+
+        .mobile-menu-content {
+            flex: 1;
+            padding: 20px 0;
+            overflow-y: auto;
+        }
+
+        .mobile-nav-section {
+            margin-bottom: 32px;
+        }
+
+        .mobile-section-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #8e8e93;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0 20px;
+            margin-bottom: 12px;
+        }
+
+        .mobile-nav-item {
+            display: block;
+            padding: 16px 20px;
+            color: #1c1c1e;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 500;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .mobile-nav-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .mobile-nav-item.logout {
+            color: #ff3b30;
+            font-weight: 600;
+        }
+
+        .mobile-nav-item.logout:hover {
+            background-color: #fff2f2;
+        }
+
+        /* ============= LEADERBOARD CONTAINER ============= */
+        .leaderboard-container {
+            min-height: calc(100vh - 140px);
+            padding: 40px 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .leaderboard-header {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(229, 229, 234, 0.3);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 32px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        .leaderboard-title {
+            font-size: 36px;
+            font-weight: 700;
+            color: #1c1c1e;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .leaderboard-subtitle {
+            font-size: 18px;
+            color: #8e8e93;
+            margin-bottom: 32px;
+        }
+
+        .leaderboard-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1c1c1e;
+        }
+
+        .control-select {
+            padding: 8px 16px;
+            border: 2px solid #e5e5ea;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            background: #fff;
+            color: #1c1c1e;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .control-select:hover {
+            border-color: #d1d1d6;
+        }
+
+        .control-select:focus {
+            border-color: #007aff;
+            outline: none;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #007aff, #0056b3);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .refresh-btn:hover {
+            background: linear-gradient(135deg, #0056b3, #004494);
+            transform: translateY(-1px);
+        }
+
+        .refresh-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .global-stats {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(229, 229, 234, 0.3);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 32px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 24px;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 12px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: #007aff;
+            box-shadow: 0 8px 25px rgba(0, 122, 255, 0.15);
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 800;
+            color: #1c1c1e;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #8e8e93;
+            font-weight: 500;
+        }
+
+        .leaderboard-table-container {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(229, 229, 234, 0.3);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 32px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
+            overflow-x: auto;
+        }
+
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .leaderboard-table th {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            padding: 16px 12px;
+            text-align: left;
+            font-weight: 700;
+            color: #1c1c1e;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .leaderboard-table th:first-child {
+            border-top-left-radius: 12px;
+            text-align: center;
+            width: 60px;
+        }
+
+        .leaderboard-table th:last-child {
+            border-top-right-radius: 12px;
+        }
+
+        .leaderboard-table td {
+            padding: 16px 12px;
+            transition: all 0.2s ease;
+        }
+
+        .leaderboard-table tr:hover td {
+            background: rgba(0, 122, 255, 0.05);
+        }
+
+        .leaderboard-table tr:last-child td {
+        }
+
+        .rank-cell {
+            text-align: center;
+            font-weight: 800;
+            font-size: 16px;
+        }
+
+        .rank-1 { color: #ffd700; text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
+        .rank-2 { color: #c0c0c0; text-shadow: 0 0 5px rgba(192, 192, 192, 0.5); }
+        .rank-3 { color: #cd7f32; text-shadow: 0 0 5px rgba(205, 127, 50, 0.5); }
+
+        .player-cell {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 4px;
+            border-radius: 8px;
+        }
+
+        .player-cell:hover {
+            background: rgba(0, 122, 255, 0.1);
+            transform: translateX(2px);
+        }
+
+        .player-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: white;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .player-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .player-name {
+            font-weight: 700;
+            color: #1c1c1e;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .player-level {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            color: white;
+        }
+
+        .points-cell {
+            font-weight: 800;
+            font-size: 16px;
+            background: linear-gradient(135deg, #007aff, #0056b3);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stats-cell {
+            font-weight: 600;
+            color: #1c1c1e;
+        }
+
+        .win-rate-high { color: #28a745; }
+        .win-rate-medium { color: #ffc107; }
+        .win-rate-low { color: #dc3545; }
+
+        .streak-active { 
+            color: #ff6b35; 
+            font-weight: 800;
+            text-shadow: 0 0 3px rgba(255, 107, 53, 0.3);
+        }
+
+        .loading-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e5ea;
+            border-top: 4px solid #007aff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #8e8e93;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8e8e93;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-state-text {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .pagination-container {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(229, 229, 234, 0.3);
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 32px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        .pagination-btn {
+            background: linear-gradient(135deg, #007aff, #0056b3);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 0 8px;
+        }
+
+        .pagination-btn:hover {
+            background: linear-gradient(135deg, #0056b3, #004494);
+            transform: translateY(-1px);
+        }
+
+        .pagination-btn:disabled {
+            background: #e5e5ea;
+            color: #8e8e93;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .pagination-info {
+            color: #8e8e93;
+            font-size: 14px;
+            margin: 0 16px;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: #4a5568;
+            color: white;
+            transform: translateY(calc(100% - 8px));
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 100;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .footer:hover {
+            transform: translateY(0);
+        }
+
+        .footer-tab {
+            height: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .footer-tab::after {
+            content: '⌃';
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #4a5568;
+            font-size: 12px;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+
+        .footer:hover .footer-tab::after {
+            opacity: 0;
+        }
+
+        .footer-content {
+            padding: 20px 24px;
+        }
+
+        .footer-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .footer-legal {
+            display: flex;
+            gap: 20px;
+        }
+
+        .footer-legal a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: color 0.3s ease;
+            cursor: pointer;
+        }
+
+        .footer-legal a:hover {
+            color: #ffffff;
+        }
+
+        .main-content {
+            min-height: calc(100vh - 20px);
+            padding-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                display: none;
+            }
+
+            .mobile-hamburger {
+                display: flex;
+            }
+
+            .leaderboard-container {
+                padding: 80px 16px 20px 16px;
+            }
+
+            .leaderboard-header {
+                padding: 24px 20px;
+                margin-bottom: 20px;
+            }
+
+            .leaderboard-title {
+                font-size: 28px;
+            }
+
+            .leaderboard-subtitle {
+                font-size: 16px;
+            }
+
+            .leaderboard-controls {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .control-group {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .control-select {
+                flex: 1;
+                max-width: 200px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 16px;
+            }
+
+            .global-stats {
+                padding: 20px;
+            }
+
+            .leaderboard-table-container {
+                padding: 20px;
+                margin: 0 -4px 32px -4px;
+            }
+
+            .leaderboard-table {
+                font-size: 12px;
+            }
+
+            .leaderboard-table th,
+            .leaderboard-table td {
+                padding: 12px 8px;
+            }
+
+            .player-cell {
+                gap: 8px;
+            }
+
+            .player-avatar {
+                width: 28px;
+                height: 28px;
+                font-size: 12px;
+            }
+
+            .player-name {
+                font-size: 13px;
+            }
+
+            .player-level {
+                font-size: 10px;
+                padding: 1px 6px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .leaderboard-container {
+                padding: 80px 12px 20px 12px;
+            }
+
+            .leaderboard-header {
+                padding: 20px 16px;
+            }
+
+            .leaderboard-title {
+                font-size: 24px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stat-card {
+                padding: 16px;
+            }
+
+            .leaderboard-table-container {
+                padding: 16px;
+            }
+
+            .leaderboard-table {
+                font-size: 11px;
+            }
+
+            .leaderboard-table th,
+            .leaderboard-table td {
+                padding: 10px 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Menu Mobile Overlay -->
+    <div class="mobile-overlay" id="mobile-overlay"></div>
+
+    <!-- Menu Mobile -->
+    <div class="mobile-menu" id="mobile-menu">
+        <div class="mobile-menu-header">
+            <div class="mobile-logo">Suirodoku.com</div>
+            <button class="mobile-close" id="mobile-close">×</button>
+        </div>
+        
+        <div class="mobile-menu-content">
+            <div class="mobile-nav-section">
+                <div class="mobile-section-title">Navigation</div>
+                <button class="mobile-nav-item" onclick="navigateTo('home'); closeMobileMenu();">
+                    🏠 Home
+                </button>
+                <button class="mobile-nav-item" onclick="navigateTo('tutorial'); closeMobileMenu();">
+                    📚 How to Play
+                </button>
+                <button class="mobile-nav-item" onclick="navigateTo('leaderboard'); closeMobileMenu();">
+                    🏆 Leaderboards
+                </button>
+            </div>
+            
+            <div class="mobile-nav-section" id="mobile-auth-section">
+                <div class="mobile-section-title">Account</div>
+            </div>
+            
+            <div class="mobile-nav-section">
+                <div class="mobile-section-title">Legal</div>
+                <button class="mobile-nav-item" onclick="navigateTo('legal'); closeMobileMenu();">
+                    📄 Privacy & Terms
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Hamburger Button -->
+    <div class="mobile-hamburger" id="mobile-hamburger">
+        <div class="hamburger-line"></div>
+        <div class="hamburger-line"></div>
+        <div class="hamburger-line"></div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="logo" onclick="goToHome()">Suirodoku.com</div>
+        
+        <nav class="nav-menu">
+            <button class="nav-btn" onclick="navigateTo('tutorial')">
+                How to Play
+            </button>
+            
+            <button class="nav-btn active" onclick="navigateTo('leaderboard')">
+                Leaderboards
+            </button>
+        </nav>
+        
+        <div class="auth-buttons" id="desktop-auth-buttons">
+            <button class="auth-btn" onclick="navigateTo('auth')">Log In</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="leaderboard-container">
+            <div class="leaderboard-header">
+                <div class="leaderboard-title">🏆 Global Rankings</div>
+                <div class="leaderboard-subtitle">Compete with players worldwide and climb the rankings!</div>
+                
+                <div class="leaderboard-controls">
+                    <div class="control-group">
+                        <label class="control-label">Region:</label>
+                        <select class="control-select" id="region-filter">
+                            <option value="global">🌍 Global</option>
+                            <option value="FR">🇫🇷 France</option>
+                            <option value="US">🇺🇸 United States</option>
+                            <option value="GB">🇬🇧 United Kingdom</option>
+                            <option value="DE">🇩🇪 Germany</option>
+                            <option value="ES">🇪🇸 Spain</option>
+                            <option value="IT">🇮🇹 Italy</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label class="control-label">Show:</label>
+                        <select class="control-select" id="limit-filter">
+                            <option value="25">Top 25</option>
+                            <option value="50" selected>Top 50</option>
+                            <option value="100">Top 100</option>
+                        </select>
+                    </div>
+                    
+                    <button class="refresh-btn" id="refresh-btn" onclick="refreshLeaderboard()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            <div class="global-stats" id="global-stats">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-players">-</div>
+                        <div class="stat-label">Active Players</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-games">-</div>
+                        <div class="stat-label">Games Played</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="avg-score">-</div>
+                        <div class="stat-label">Average Score</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="top-streak">-</div>
+                        <div class="stat-label">Longest Streak</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="loading-container" id="loading-container">
+                <div class="spinner"></div>
+                <div class="loading-text">Loading leaderboard...</div>
+            </div>
+
+            <div class="leaderboard-table-container" id="leaderboard-table-container" style="display: none;">
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Player</th>
+                            <th>Level</th>
+                            <th>Points</th>
+                            <th>Games</th>
+                            <th>Win Rate</th>
+                            <th>Streak</th>
+                            <th>Perfect</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-tbody">
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination-container" id="pagination-container" style="display: none;">
+                <button class="pagination-btn" id="load-more-btn" onclick="loadMoreResults()">
+                    Load More Players
+                </button>
+                <div class="pagination-info" id="pagination-info">
+                    Showing <span id="current-count">0</span> players
+                </div>
+            </div>
+
+            <div class="empty-state" id="empty-state" style="display: none;">
+                <div class="empty-state-icon">🏆</div>
+                <div class="empty-state-title">No players found</div>
+                <div class="empty-state-text">Be the first to play and appear in the rankings!</div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-tab"></div>
+        <div class="footer-content">
+            <div class="footer-bottom">
+                <div class="footer-copyright">
+                    © 2024 Suirodoku.com. All rights reserved.
+                </div>
+                <div class="footer-legal">
+                    <a onclick="navigateTo('legal')">Privacy Policy</a>
+                    <a onclick="navigateTo('legal')">Terms of Service</a>
+                    <a onclick="navigateTo('legal')">Contact</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, where, startAfter } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDHP3A6BZXAx72fY0_BFJQe9y1F2Za_Xo8",
+            authDomain: "suirodoku-web.firebaseapp.com",
+            projectId: "suirodoku-web",
+            storageBucket: "suirodoku-web.firebasestorage.app",
+            messagingSenderId: "936879624195",
+            appId: "1:936879624195:web:e3d2682df7c9b213d87e36",
+            measurementId: "G-RPJXTCGLZN"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.firebaseAuth = {
+            auth, db, onAuthStateChanged, signOut, doc, getDoc, 
+            collection, getDocs, query, orderBy, limit, where, startAfter
+        };
+
+        window.getDisplayName = function(userData) {
+            if (userData.profile?.displayPreference === 'gamertag' && userData.profile?.gamertag) {
+                return userData.profile.gamertag;
+            }
+            return userData.displayName || 'Anonymous';
+        };
+
+        // Make functions globally available
+        window.getFlagEmoji = function(countryCode) {
+            const flags = {
+                'FR': '🇫🇷', 'US': '🇺🇸', 'GB': '🇬🇧', 'DE': '🇩🇪', 'ES': '🇪🇸',
+                'IT': '🇮🇹', 'JP': '🇯🇵', 'CN': '🇨🇳', 'BR': '🇧🇷', 'CA': '🇨🇦',
+                'AU': '🇦🇺', 'IN': '🇮🇳', 'RU': '🇷🇺', 'MX': '🇲🇽', 'KR': '🇰🇷',
+                'NL': '🇳🇱', 'SE': '🇸🇪', 'NO': '🇳🇴', 'DK': '🇩🇰', 'FI': '🇫🇮',
+                'CH': '🇨🇭', 'AT': '🇦🇹', 'BE': '🇧🇪', 'PL': '🇵🇱', 'PT': '🇵🇹'
+            };
+            return flags[countryCode] || '🌍';
+        };
+
+        window.getCountryName = function(countryCode) {
+            const countries = {
+                'FR': 'France',
+                'US': 'United States', 
+                'GB': 'United Kingdom',
+                'DE': 'Germany',
+                'ES': 'Spain',
+                'IT': 'Italy',
+                'JP': 'Japan',
+                'CN': 'China',
+                'BR': 'Brazil',
+                'CA': 'Canada',
+                'AU': 'Australia',
+                'IN': 'India',
+                'RU': 'Russia',
+                'MX': 'Mexico',
+                'KR': 'South Korea',
+                'NL': 'Netherlands',
+                'SE': 'Sweden',
+                'NO': 'Norway',
+                'DK': 'Denmark',
+                'FI': 'Finland',
+                'CH': 'Switzerland',
+                'AT': 'Austria',
+                'BE': 'Belgium',
+                'PL': 'Poland',
+                'PT': 'Portugal'
+            };
+            return countries[countryCode] || 'Unknown';
+        };
+
+        window.getUserData = async function(user) {
+            try {
+                const userRef = doc(db, 'users', user.uid);
+                const userDoc = await getDoc(userRef);
+                
+                if (userDoc.exists()) {
+                    return { ...user, ...userDoc.data() };
+                }
+                return user;
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+                return user;
+            }
+        };
+
+        window.getPlayerLevel = function(rankingPoints) {
+            const levels = [
+                { name: 'Novice', minPoints: 0, color: '#8e8e93', icon: '🥉' },
+                { name: 'Beginner', minPoints: 500, color: '#34c759', icon: '🟢' },
+                { name: 'Intermediate', minPoints: 1500, color: '#007aff', icon: '🔵' },
+                { name: 'Advanced', minPoints: 3500, color: '#af52de', icon: '🟣' },
+                { name: 'Expert', minPoints: 7000, color: '#ff9500', icon: '🟠' },
+                { name: 'Master', minPoints: 15000, color: '#ff3b30', icon: '🔴' },
+                { name: 'Grandmaster', minPoints: 30000, color: '#ffd700', icon: '👑' }
+            ];
+            
+            for (let i = levels.length - 1; i >= 0; i--) {
+                if (rankingPoints >= levels[i].minPoints) {
+                    return levels[i];
+                }
+            }
+            return levels[0];
+        };
+
+        console.log('🔥 Firebase initialized successfully');
+    </script>
+
+    <script>
+        let currentUser = null;
+        let leaderboardData = [];
+        let currentRegion = 'global';
+        let currentLimit = 50;
+        let isLoading = false;
+        let lastVisibleDoc = null;
+        let hasMoreResults = true;
+
+        function initializeLeaderboardAuth() {
+            if (typeof window.firebaseAuth === 'undefined') {
+                setTimeout(initializeLeaderboardAuth, 100);
+                return;
+            }
+
+            const { auth, onAuthStateChanged } = window.firebaseAuth;
+
+            onAuthStateChanged(auth, (user) => {
+                currentUser = user;
+                console.log(user ? 'User authenticated' : 'User not authenticated');
+                updateHeaderAuthState(user);
+                loadLeaderboard();
+            });
+        }
+
+        async function updateHeaderAuthState(user) {
+            const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
+            const mobileAuthSection = document.getElementById('mobile-auth-section');
+            
+            if (user && desktopAuthButtons) {
+                const userData = await getUserData(user);
+                const displayName = getDisplayName(userData);
+                const flag = userData.profile?.nationality ? getFlagEmoji(userData.profile.nationality) : '';
+                
+                desktopAuthButtons.innerHTML = `
+                    <div class="user-menu">
+                        <div class="user-name">
+                            <span class="user-flag">${flag}</span>
+                            <span>${displayName}</span>
+                        </div>
+                        <div class="dropdown-menu">
+                            <a href="../profile/">👤 My Profile</a>
+                            <a href="../stats/">📊 My Statistics</a>
+                            <a href="../settings/">⚙️ Settings</a>
+                            <a href="#" onclick="signOutUser()">🚪 Sign Out</a>
+                        </div>
+                    </div>
+                `;
+                
+                if (mobileAuthSection) {
+                    mobileAuthSection.innerHTML = `
+                        <div class="mobile-section-title">Account</div>
+                        <button class="mobile-nav-item" onclick="navigateTo('profile'); closeMobileMenu();">
+                            👤 My Profile
+                        </button>
+                        <button class="mobile-nav-item" onclick="navigateTo('stats'); closeMobileMenu();">
+                            📊 My Statistics
+                        </button>
+                        <button class="mobile-nav-item" onclick="navigateTo('settings'); closeMobileMenu();">
+                            ⚙️ Settings
+                        </button>
+                        <button class="mobile-nav-item logout" onclick="signOutUser(); closeMobileMenu();">
+                            🚪 Sign Out
+                        </button>
+                    `;
+                }
+            } else if (desktopAuthButtons) {
+                desktopAuthButtons.innerHTML = `
+                    <button class="auth-btn" onclick="navigateTo('auth')">Log In</button>
+                `;
+                
+                if (mobileAuthSection) {
+                    mobileAuthSection.innerHTML = `
+                        <div class="mobile-section-title">Account</div>
+                        <button class="mobile-nav-item" onclick="navigateTo('auth'); closeMobileMenu();">
+                            Log In
+                        </button>
+                    `;
+                }
+            }
+        }
+
+        window.signOutUser = async function() {
+            const confirmed = confirm('Are you sure you want to sign out?');
+            if (!confirmed) return;
+
+            try {
+                const { auth, signOut } = window.firebaseAuth;
+                await signOut(auth);
+                console.log('✅ User signed out successfully');
+                updateHeaderAuthState(null);
+            } catch (error) {
+                console.error('❌ Error signing out:', error);
+                alert('Error signing out. Please try again.');
+            }
+        };
+
+        function getWinRateClass(winRate) {
+            if (winRate >= 70) return 'win-rate-high';
+            if (winRate >= 40) return 'win-rate-medium';
+            return 'win-rate-low';
+        }
+
+        async function loadLeaderboard(isLoadMore = false) {
+            if (isLoading) return;
+            
+            try {
+                isLoading = true;
+                showLoading(true);
+                
+                console.log(`🏆 Loading ${currentRegion} leaderboard...`);
+                
+                // Simulate loading time
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Try to get real data from Firebase
+                let data = [];
+                if (typeof window.getGlobalLeaderboard === 'function') {
+                    if (currentRegion === 'global') {
+                        data = await window.getGlobalLeaderboard(currentLimit, lastVisibleDoc);
+                    } else if (typeof window.getCountryLeaderboard === 'function') {
+                        data = await window.getCountryLeaderboard(currentRegion, currentLimit, lastVisibleDoc);
+                    }
+                }
+                
+                // If no real data, show empty state
+                displayLeaderboard(data);
+                updateGlobalStats(data);
+                updatePagination(data);
+                
+            } catch (error) {
+                console.error('❌ Error loading leaderboard:', error);
+                showError('Failed to load leaderboard. Please try again.');
+            } finally {
+                isLoading = false;
+                showLoading(false);
+            }
+        }
+
+        function displayLeaderboard(data) {
+            const tbody = document.getElementById('leaderboard-tbody');
+            const tableContainer = document.getElementById('leaderboard-table-container');
+            const emptyState = document.getElementById('empty-state');
+            const loadingContainer = document.getElementById('loading-container');
+            
+            if (!data || data.length === 0) {
+                tableContainer.style.display = 'none';
+                emptyState.style.display = 'block';
+                loadingContainer.style.display = 'none';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            loadingContainer.style.display = 'none';
+            tableContainer.style.display = 'block';
+            
+            tbody.innerHTML = '';
+            
+            data.forEach((player) => {
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td class="rank-cell ${player.rank <= 3 ? `rank-${player.rank}` : ''}">
+                        ${player.rank <= 3 ? ['🥇', '🥈', '🥉'][player.rank - 1] : `#${player.rank}`}
+                    </td>
+                    <td>
+                        <div class="player-cell" onclick="viewPlayerProfile('${player.userId || player.displayName}')">
+                            <div class="player-avatar">${player.displayName.charAt(0).toUpperCase()}</div>
+                            <div class="player-info">
+                                <div class="player-name">
+                                    ${player.displayName}
+                                </div>
+                                <div class="player-level" style="background: ${player.level.color};">
+                                    ${player.level.icon} ${player.level.name}
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="stats-cell">${player.level.name}</td>
+                    <td class="points-cell">${formatNumber(player.rankingPoints)}</td>
+                    <td class="stats-cell">${formatNumber(player.totalGames)}</td>
+                    <td class="stats-cell">
+                        <span class="${getWinRateClass(player.winRate)}">${player.winRate}%</span>
+                    </td>
+                    <td class="stats-cell">
+                        <span class="${player.currentStreak > 0 ? 'streak-active' : ''}">${player.currentStreak}</span>
+                    </td>
+                    <td class="stats-cell">${player.perfectGames}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateGlobalStats(data) {
+            if (!data || data.length === 0) {
+                document.getElementById('total-players').textContent = '0';
+                document.getElementById('total-games').textContent = '0';
+                document.getElementById('avg-score').textContent = '0';
+                document.getElementById('top-streak').textContent = '0';
+                return;
+            }
+            
+            const totalPlayers = data.length;
+            const totalGames = data.reduce((sum, player) => sum + player.totalGames, 0);
+            const avgScore = totalGames > 0 ? Math.round(data.reduce((sum, player) => sum + (player.rankingPoints * player.totalGames), 0) / totalGames) : 0;
+            const topStreak = Math.max(...data.map(player => player.currentStreak), 0);
+            
+            document.getElementById('total-players').textContent = formatNumber(totalPlayers);
+            document.getElementById('total-games').textContent = formatNumber(totalGames);
+            document.getElementById('avg-score').textContent = formatNumber(avgScore);
+            document.getElementById('top-streak').textContent = formatNumber(topStreak);
+        }
+
+        function updatePagination(data = []) {
+            const paginationContainer = document.getElementById('pagination-container');
+            const currentCount = document.getElementById('current-count');
+            
+            if (data.length > 0) {
+                paginationContainer.style.display = 'block';
+                currentCount.textContent = data.length;
+            } else {
+                paginationContainer.style.display = 'none';
+            }
+        }
+
+        function loadMoreResults() {
+            console.log('📄 Loading more results...');
+            loadLeaderboard(true);
+        }
+
+        function showLoading(show) {
+            const loadingContainer = document.getElementById('loading-container');
+            const tableContainer = document.getElementById('leaderboard-table-container');
+            const emptyState = document.getElementById('empty-state');
+            const paginationContainer = document.getElementById('pagination-container');
+            
+            if (show) {
+                loadingContainer.style.display = 'flex';
+                loadingContainer.innerHTML = `
+                    <div class="spinner"></div>
+                    <div class="loading-text">Loading leaderboard...</div>
+                `;
+                tableContainer.style.display = 'none';
+                emptyState.style.display = 'none';
+                paginationContainer.style.display = 'none';
+            } else {
+                loadingContainer.style.display = 'none';
+            }
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+            if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+            return num.toString();
+        }
+
+        function getCountryName(countryCode) {
+            return window.getCountryName(countryCode);
+        }
+
+        function getFlagEmoji(countryCode) {
+            return window.getFlagEmoji(countryCode);
+        }
+
+        function viewPlayerProfile(playerId) {
+            console.log('📊 Viewing profile for player:', playerId);
+            
+            // Si c'est l'utilisateur connecté, aller à son profil
+            if (currentUser && playerId === currentUser.uid) {
+                window.location.href = '../profile/';
+                return;
+            }
+            
+            // Sinon, aller à la page de profil public avec l'ID du joueur
+            window.location.href = `../profile/?player=${encodeURIComponent(playerId)}`;
+        }
+
+        function refreshLeaderboard() {
+            console.log('🔄 Refreshing leaderboard...');
+            const refreshBtn = document.getElementById('refresh-btn');
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="animation: spin 1s linear infinite;">
+                    <path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/>
+                </svg>
+                Loading...
+            `;
+            
+            loadLeaderboard()
+                .then(() => {
+                    console.log('✅ Leaderboard refreshed successfully');
+                })
+                .catch((error) => {
+                    console.error('❌ Error refreshing leaderboard:', error);
+                })
+                .finally(() => {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = `
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/>
+                        </svg>
+                        Refresh
+                    `;
+                });
+        }
+
+        function navigateTo(page) {
+            switch(page) {
+                case 'home':
+                    window.location.href = '../';
+                    break;
+                case 'profile':
+                    window.location.href = '../profile/';
+                    break;
+                case 'stats':
+                    window.location.href = '../stats/';
+                    break;
+                case 'settings':
+                    window.location.href = '../settings/';
+                    break;
+                case 'auth':
+                    window.location.href = '../auth/';
+                    break;
+                case 'tutorial':
+                    window.location.href = '../tutorial/';
+                    break;
+                case 'leaderboard':
+                    window.location.href = '../leaderboard/';
+                    break;
+                case 'legal':
+                    window.location.href = '../legal/';
+                    break;
+                default:
+                    console.log('Navigate to:', page);
+            }
+        }
+
+        function goToHome() {
+            window.location.href = '../';
+        }
+
+        function openMobileMenu() {
+            const overlay = document.getElementById('mobile-overlay');
+            const menu = document.getElementById('mobile-menu');
+            const hamburger = document.getElementById('mobile-hamburger');
+            
+            overlay.classList.add('show');
+            menu.classList.add('show');
+            hamburger.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMobileMenu() {
+            const overlay = document.getElementById('mobile-overlay');
+            const menu = document.getElementById('mobile-menu');
+            const hamburger = document.getElementById('mobile-hamburger');
+            
+            overlay.classList.remove('show');
+            menu.classList.remove('show');
+            hamburger.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeLeaderboardAuth();
+
+            const regionFilter = document.getElementById('region-filter');
+            const limitFilter = document.getElementById('limit-filter');
+            
+            regionFilter.addEventListener('change', function() {
+                currentRegion = this.value;
+                console.log('🌍 Region changed to:', currentRegion);
+                loadLeaderboard();
+            });
+            
+            limitFilter.addEventListener('change', function() {
+                currentLimit = parseInt(this.value);
+                console.log('📊 Limit changed to:', currentLimit);
+                loadLeaderboard();
+            });
+
+            const mobileHamburger = document.getElementById('mobile-hamburger');
+            const mobileOverlay = document.getElementById('mobile-overlay');
+            const mobileClose = document.getElementById('mobile-close');
+            
+            if (mobileHamburger) {
+                mobileHamburger.addEventListener('click', function() {
+                    if (this.classList.contains('active')) {
+                        closeMobileMenu();
+                    } else {
+                        openMobileMenu();
+                    }
+                });
+            }
+            
+            if (mobileOverlay) {
+                mobileOverlay.addEventListener('click', closeMobileMenu);
+            }
+            
+            if (mobileClose) {
+                mobileClose.addEventListener('click', closeMobileMenu);
+            }
+        });
+
+        console.log('✅ Leaderboard page loaded successfully!');
+    </script>
+</body>
+</html>

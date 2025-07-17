@@ -674,8 +674,8 @@
                             <span class="stat-value" id="ranked-games">0</span>
                         </div>
                         <div class="stat-row">
-                            <span class="stat-label">Current Level</span>
-                            <span class="stat-value stat-highlight" id="current-level">Beginner</span>
+                            <span class="stat-label">Current Rating</span>
+                            <span class="stat-value stat-highlight" id="current-rating">1000</span>
                         </div>
                     </div>
                 </div>
@@ -953,10 +953,10 @@
                         flagElement.style.display = 'none';
                     }
 
-                    const level = userData.gameStats?.level || 'Beginner';
+                    const level = this.getPlayerLevel(userData.improvedStats?.ranked?.currentRating || 0); // ✅ CHANGÉ
                     const levelElement = document.getElementById('profile-level');
-                    levelElement.textContent = level;
-                    levelElement.style.background = this.getLevelColor(level);
+                    levelElement.textContent = level.name;
+                    levelElement.style.background = level.color;
 
                     const bioElement = document.getElementById('profile-bio');
                     if (userData.profile?.bio) {
@@ -968,8 +968,8 @@
 
                     this.displayJoinDate(userData);
                     this.displayProfileActions();
-                    this.displayStats(userData.gameStats || {});
-                    this.displayBestScores(userData.gameStats?.bestScores || {});
+                    this.displayStats(userData.improvedStats || {}); // ✅ CHANGÉ
+                    this.displayBestScores(userData.improvedStats || {}); // ✅ CHANGÉ
                     
                 } catch (error) {
                     console.error('Error displayProfile:', error);
@@ -1025,25 +1025,43 @@
                 }
             },
 
-            displayStats: function(gameStats) {
+            // ✅ FONCTION COMPLÈTEMENT RÉÉCRITE pour improvedStats
+            displayStats: function(improvedStats) {
                 try {
-                    document.getElementById('total-games').textContent = gameStats.totalGamesPlayed || 0;
-                    document.getElementById('games-won').textContent = gameStats.totalGamesWon || 0;
+                    const stats = improvedStats || {};
+                    const practice = stats.practice || {};
+                    const ranked = stats.ranked || {};
                     
-                    const winRate = gameStats.totalGamesPlayed > 0 ? 
-                        Math.round((gameStats.totalGamesWon / gameStats.totalGamesPlayed) * 100) : 0;
+                    // Stats générales
+                    document.getElementById('total-games').textContent = stats.totalGames || 0;
+                    
+                    const totalWins = (practice.gamesCompleted || 0) + (ranked.gamesCompleted || 0);
+                    document.getElementById('games-won').textContent = totalWins;
+                    
+                    const winRate = stats.totalGames > 0 ? Math.round((totalWins / stats.totalGames) * 100) : 0;
                     document.getElementById('win-rate').textContent = `${winRate}%`;
                     
-                    document.getElementById('avg-score').textContent = this.formatNumber(gameStats.averageScore || 0);
-                    document.getElementById('avg-time').textContent = this.formatTime(gameStats.averageTime || 0);
-                    document.getElementById('total-time').textContent = this.formatTotalTime(gameStats.totalTimeSpent || 0);
-                    document.getElementById('performance').textContent = `${Math.round(gameStats.currentPerformance || 0)}%`;
+                    const avgScore = practice.totalScore && practice.gamesCompleted ? 
+                        Math.round(practice.totalScore / practice.gamesCompleted) : 0;
+                    document.getElementById('avg-score').textContent = this.formatNumber(avgScore);
                     
-                    document.getElementById('practice-games').textContent = gameStats.practiceGames || 0;
-                    document.getElementById('ranked-games').textContent = gameStats.rankedGames || 0;
-                    document.getElementById('current-level').textContent = gameStats.level || 'Beginner';
+                    // Performance
+                    const avgTime = stats.totalPlayTime && stats.totalGames ? 
+                        Math.round(stats.totalPlayTime / stats.totalGames) : 0;
+                    document.getElementById('avg-time').textContent = this.formatTime(avgTime);
+                    document.getElementById('total-time').textContent = this.formatTotalTime(stats.totalPlayTime || 0);
                     
-                    this.displayLastPlayed(gameStats.lastPlayed);
+                    // Rating comme performance (sur base 2000 = 100%)
+                    const performance = ranked.currentRating ? Math.round((ranked.currentRating / 2000) * 100) : 0;
+                    document.getElementById('performance').textContent = `${performance}%`;
+                    
+                    // Modes de jeu
+                    document.getElementById('practice-games').textContent = practice.gamesPlayed || 0;
+                    document.getElementById('ranked-games').textContent = ranked.gamesPlayed || 0;
+                    document.getElementById('current-rating').textContent = ranked.currentRating || 1000;
+                    
+                    // Last played - à implémenter si nécessaire
+                    this.displayLastPlayed(stats.lastPlayed);
                 } catch (error) {
                     console.error('Error displayStats:', error);
                 }
@@ -1065,8 +1083,10 @@
                 }
             },
 
-            displayBestScores: function(bestScores) {
+            // ✅ FONCTION COMPLÈTEMENT RÉÉCRITE pour improvedStats
+            displayBestScores: function(improvedStats) {
                 try {
+                    const bestScores = improvedStats?.practice?.bestScores || {}; // ✅ CHANGÉ
                     const difficulties = ['easy', 'medium', 'hard', 'expert', 'master'];
                     
                     difficulties.forEach(difficulty => {
@@ -1133,17 +1153,13 @@
                 }, 1000);
             },
 
-            getLevelColor: function(level) {
-                const colors = {
-                    'Beginner': 'linear-gradient(135deg, #8e8e93, #6d6d70)',
-                    'Novice': 'linear-gradient(135deg, #34c759, #28a745)',
-                    'Intermediate': 'linear-gradient(135deg, #007aff, #0056b3)',
-                    'Advanced': 'linear-gradient(135deg, #af52de, #8e44ad)',
-                    'Expert': 'linear-gradient(135deg, #ff9500, #e67e22)',
-                    'Master': 'linear-gradient(135deg, #ff3b30, #e74c3c)',
-                    'Legend': 'linear-gradient(135deg, #ffd700, #f39c12)'
-                };
-                return colors[level] || colors['Beginner'];
+            getPlayerLevel: function(rating) {
+                if (rating < 1000) return { name: 'Beginner', color: 'linear-gradient(135deg, #8e8e93, #6d6d70)' };
+                if (rating < 1400) return { name: 'Intermediate', color: 'linear-gradient(135deg, #007aff, #0056b3)' };
+                if (rating < 1800) return { name: 'Advanced', color: 'linear-gradient(135deg, #af52de, #8e44ad)' };
+                if (rating < 2200) return { name: 'Expert', color: 'linear-gradient(135deg, #ff9500, #e67e22)' };
+                if (rating < 2600) return { name: 'Master', color: 'linear-gradient(135deg, #ff3b30, #e74c3c)' };
+                return { name: 'Legend', color: 'linear-gradient(135deg, #ffd700, #f39c12)' };
             },
 
             formatNumber: function(num) {

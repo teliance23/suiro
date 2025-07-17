@@ -22,7 +22,8 @@
         // Import Firebase functions
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, signInWithPopup, GoogleAuthProvider, FacebookAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        // ⚡ NOUVEAU : Imports Firebase complets pour le système de rankings
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, getDocs, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // Firebase configuration
         const firebaseConfig = {
@@ -77,7 +78,14 @@
             signOut,
             doc,
             setDoc,
-            getDoc
+            getDoc,
+            updateDoc,
+            collection,
+            getDocs,
+            query,
+            orderBy,
+            limit,
+            where
         };
 
         // ============= FIREBASE GAME FUNCTIONS =============
@@ -125,30 +133,55 @@
             }
         };
 
-        // Fonction pour mettre à jour les stats du joueur
+        // ⚡ NOUVEAU : Fonction pour mettre à jour les stats du joueur avec ranking
         async function updatePlayerStats(userId, gameData) {
             try {
-                const { updateDoc, arrayUnion, increment } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
                 const userRef = doc(db, 'users', userId);
                 const userDoc = await getDoc(userRef);
                 
+                // ⚡ NOUVEAU : Structure de stats complète avec ranking
                 let currentStats = {
                     totalGamesPlayed: 0,
                     totalGamesWon: 0,
                     totalTimeSpent: 0,
                     averageTime: 0,
-                    averageScore: 0, // ⭐ NOUVEAU: Score moyen pondéré
-                    bestScores: {},
+                    averageScore: 0,
+                    bestScores: { easy: 0, medium: 0, hard: 0, expert: 0, master: 0 },
                     practiceGames: 0,
                     rankedGames: 0,
                     level: 'Beginner',
                     currentPerformance: 0,
-                    lastPlayed: new Date()
+                    lastPlayed: new Date(),
+                    gamesCompleted: 0,
+                    gamesAbandoned: 0,
+                    gamesDefeated: 0,
+                    // ⚡ NOUVEAU : Champs ranking
+                    ranking: {
+                        totalScore: 0,
+                        averageScore: 0,
+                        perfectGames: 0,
+                        rankingPoints: 0,
+                        bestRank: 0,
+                        currentStreak: 0,
+                        bestStreak: 0
+                    }
                 };
 
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     currentStats = { ...currentStats, ...(userData.gameStats || {}) };
+                    // ⚡ NOUVEAU : Assurer que les champs ranking existent
+                    if (!currentStats.ranking) {
+                        currentStats.ranking = {
+                            totalScore: 0,
+                            averageScore: 0,
+                            perfectGames: 0,
+                            rankingPoints: 0,
+                            bestRank: 0,
+                            currentStreak: 0,
+                            bestStreak: 0
+                        };
+                    }
                 }
 
                 // ============= CALCUL DU SCORE AVEC PÉNALITÉ JUSTE =============
@@ -174,6 +207,19 @@
                 const newRankedGames = gameData.gameMode === 'ranked' ? 
                     (currentStats.rankedGames || 0) + 1 : (currentStats.rankedGames || 0);
 
+                // ⚡ NOUVEAU : Compteurs de résultats
+                let newGamesCompleted = currentStats.gamesCompleted || 0;
+                let newGamesAbandoned = currentStats.gamesAbandoned || 0;
+                let newGamesDefeated = currentStats.gamesDefeated || 0;
+
+                if (gameData.isCompleted) {
+                    newGamesCompleted++;
+                } else if (gameData.isAbandoned) {
+                    newGamesAbandoned++;
+                } else if (gameData.isDefeated) {
+                    newGamesDefeated++;
+                }
+
                 // Mettre à jour le meilleur score pour cette difficulté (seulement si gagné)
                 const currentBest = currentStats.bestScores?.[gameData.difficulty] || 0;
                 const newBestScores = { ...currentStats.bestScores };
@@ -192,37 +238,99 @@
                     newPerformance = Math.round(((newAverageScore / averageInitialScore) * 100) * 100) / 100;
                 }
 
+                // ⚡ NOUVEAU : Calcul des stats de ranking
+                const newRanking = calculateRankingStats(currentStats.ranking, gameData, isWin);
+
                 // ============= METTRE À JOUR LA BASE DE DONNÉES =============
                 const updatedStats = {
                     totalGamesPlayed: newTotalGames,
                     totalGamesWon: newTotalWins,
                     totalTimeSpent: newTotalTime,
                     averageTime: newAverageTime,
-                    averageScore: newAverageScore, // ⭐ Score moyen pondéré
+                    averageScore: newAverageScore,
                     bestScores: newBestScores,
                     practiceGames: newPracticeGames,
                     rankedGames: newRankedGames,
                     level: newLevel,
                     currentPerformance: Math.max(0, Math.min(100, newPerformance)),
-                    lastPlayed: new Date()
+                    lastPlayed: new Date(),
+                    gamesCompleted: newGamesCompleted,
+                    gamesAbandoned: newGamesAbandoned,
+                    gamesDefeated: newGamesDefeated,
+                    // ⚡ NOUVEAU : Stats de ranking
+                    ranking: newRanking
                 };
 
                 await updateDoc(userRef, {
                     gameStats: updatedStats
                 }, { merge: true });
 
-                console.log('Player stats updated successfully:', {
+                console.log('✅ Player stats updated successfully with ranking:', {
                     totalGames: newTotalGames,
                     averageScore: newAverageScore,
                     calculatedScore: calculatedScore,
                     finalScore: gameData.finalScore,
-                    level: newLevel
+                    level: newLevel,
+                    rankingPoints: newRanking.rankingPoints,
+                    currentStreak: newRanking.currentStreak
                 });
 
             } catch (error) {
-                console.error('Error updating player stats:', error);
+                console.error('❌ Error updating player stats:', error);
                 throw error;
             }
+        }
+
+        // ⚡ NOUVEAU : Fonction pour calculer les stats de ranking
+        function calculateRankingStats(currentRanking, gameData, isWin) {
+            const newRanking = { ...currentRanking };
+            
+            // Mise à jour du score total
+            newRanking.totalScore = (newRanking.totalScore || 0) + gameData.finalScore;
+            
+            // Mise à jour du score moyen
+            const totalGames = (newRanking.totalGames || 0) + 1;
+            newRanking.averageScore = Math.round(newRanking.totalScore / totalGames);
+            newRanking.totalGames = totalGames;
+            
+            // Partie parfaite (aucune erreur et terminée)
+            if (gameData.isCompleted && gameData.errors === 0) {
+                newRanking.perfectGames = (newRanking.perfectGames || 0) + 1;
+            }
+            
+            // Calcul des ranking points basé sur la performance
+            const rankingPoints = calculateRankingPoints(gameData, isWin);
+            newRanking.rankingPoints = (newRanking.rankingPoints || 0) + rankingPoints;
+            
+            // Gestion des streaks
+            if (isWin) {
+                newRanking.currentStreak = (newRanking.currentStreak || 0) + 1;
+                newRanking.bestStreak = Math.max(newRanking.bestStreak || 0, newRanking.currentStreak);
+            } else {
+                newRanking.currentStreak = 0;
+            }
+            
+            return newRanking;
+        }
+
+        // ⚡ NOUVEAU : Fonction pour calculer les points de ranking
+        function calculateRankingPoints(gameData, isWin) {
+            if (!isWin) return -10; // Pénalité pour les parties perdues
+            
+            const difficultyMultipliers = {
+                'easy': 1,
+                'medium': 1.5,
+                'hard': 2,
+                'expert': 3,
+                'master': 5
+            };
+            
+            const basePoints = 100;
+            const difficultyBonus = basePoints * (difficultyMultipliers[gameData.difficulty] || 1);
+            const timeBonus = Math.max(0, 50 - Math.floor(gameData.time / 60)); // Bonus temps
+            const errorPenalty = gameData.errors * 10; // Pénalité erreurs
+            
+            return Math.max(10, Math.round(difficultyBonus + timeBonus - errorPenalty));
         }
 
         // ============= CALCUL DU SCORE AVEC PÉNALITÉ JUSTE =============
@@ -285,15 +393,16 @@
             return 'Legend';
         }
 
-        // Fonction pour récupérer le classement global
+        // ⚡ NOUVEAU : Fonction pour récupérer le classement global
         window.getLeaderboards = async function(difficulty = null, limit = 50) {
             try {
-                const { query, collection, orderBy, limit: firestoreLimit, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+                console.log('🏆 Getting leaderboards...');
                 
+                // Query pour récupérer les utilisateurs avec les meilleurs ranking points
                 let leaderboardQuery = query(
                     collection(db, 'users'),
-                    orderBy('gameStats.currentPerformance', 'desc'),
-                    firestoreLimit(limit)
+                    orderBy('gameStats.ranking.rankingPoints', 'desc'),
+                    limit(limit)
                 );
 
                 const querySnapshot = await getDocs(leaderboardQuery);
@@ -301,23 +410,57 @@
 
                 querySnapshot.forEach((doc) => {
                     const userData = doc.data();
-                    if (userData.gameStats && userData.gameStats.gamesPlayed > 0) {
+                    if (userData.gameStats && userData.gameStats.totalGamesPlayed > 0) {
                         leaderboard.push({
                             userId: doc.id,
                             displayName: userData.displayName || 'Anonymous',
-                            level: userData.gameStats.level,
-                            performance: userData.gameStats.currentPerformance,
-                            gamesPlayed: userData.gameStats.gamesPlayed,
-                            gamesWon: userData.gameStats.gamesWon,
-                            bestScores: userData.gameStats.bestScores || {}
+                            level: userData.gameStats.level || 'Beginner',
+                            rankingPoints: userData.gameStats.ranking?.rankingPoints || 0,
+                            totalGames: userData.gameStats.totalGamesPlayed || 0,
+                            gamesWon: userData.gameStats.totalGamesWon || 0,
+                            currentStreak: userData.gameStats.ranking?.currentStreak || 0,
+                            bestStreak: userData.gameStats.ranking?.bestStreak || 0,
+                            perfectGames: userData.gameStats.ranking?.perfectGames || 0,
+                            averageScore: userData.gameStats.ranking?.averageScore || 0,
+                            bestScores: userData.gameStats.bestScores || {},
+                            nationality: userData.profile?.nationality || ''
                         });
                     }
                 });
 
+                console.log(`✅ Retrieved ${leaderboard.length} leaderboard entries`);
                 return leaderboard;
             } catch (error) {
-                console.error('Error getting leaderboards:', error);
+                console.error('❌ Error getting leaderboards:', error);
                 return [];
+            }
+        };
+
+        // ⚡ NOUVEAU : Fonction pour obtenir le rang d'un utilisateur
+        window.getUserRank = async function(userId) {
+            try {
+                const userRef = doc(db, 'users', userId);
+                const userDoc = await getDoc(userRef);
+                
+                if (!userDoc.exists()) return null;
+                
+                const userData = userDoc.data();
+                const userPoints = userData.gameStats?.ranking?.rankingPoints || 0;
+                
+                // Compter combien d'utilisateurs ont plus de points
+                const higherQuery = query(
+                    collection(db, 'users'),
+                    where('gameStats.ranking.rankingPoints', '>', userPoints)
+                );
+                
+                const higherSnapshot = await getDocs(higherQuery);
+                const rank = higherSnapshot.size + 1;
+                
+                console.log(`✅ User rank calculated: ${rank}`);
+                return rank;
+            } catch (error) {
+                console.error('❌ Error getting user rank:', error);
+                return null;
             }
         };
 
@@ -1563,6 +1706,7 @@
             }
         }
 
+        // ⚡ NOUVEAU : Fonction saveUserToDatabase mise à jour avec structure rankings complète
         async function saveUserToDatabase(user) {
             try {
                 const { db, doc, setDoc, getDoc } = window.firebaseAuth;
@@ -1570,14 +1714,14 @@
                 const userDoc = await getDoc(userRef);
 
                 if (!userDoc.exists()) {
-                    // New user, save to database with extended profile structure
+                    // ⚡ NOUVEAU : Nouvel utilisateur avec structure complète rankings
                     await setDoc(userRef, {
                         uid: user.uid,
                         email: user.email,
                         displayName: user.displayName || '',
                         photoURL: user.photoURL || '',
                         
-                        // ⭐ NOUVEAU PROFIL ÉTENDU
+                        // ⭐ PROFIL ÉTENDU
                         profile: {
                             nationality: '', // Code pays ISO (FR, US, DE, etc.)
                             gamertag: '', // Pseudo joueur unique
@@ -1590,7 +1734,10 @@
                         provider: user.providerData[0]?.providerId || 'email',
                         createdAt: new Date(),
                         lastLogin: new Date(),
+                        
+                        // ⚡ NOUVEAU : Structure gameStats complète avec champs ranking
                         gameStats: {
+                            // CHAMPS EXISTANTS (préservés)
                             totalGamesPlayed: 0,
                             totalGamesWon: 0,
                             totalTimeSpent: 0,
@@ -1607,12 +1754,26 @@
                             rankedGames: 0,
                             level: 'Beginner',
                             currentPerformance: 0,
-                            lastPlayed: new Date()
+                            lastPlayed: new Date(),
+                            gamesCompleted: 0,
+                            gamesAbandoned: 0,
+                            gamesDefeated: 0,
+                            
+                            // ⚡ NOUVEAU : Champs ranking
+                            ranking: {
+                                totalScore: 0,           // Somme de tous les scores
+                                averageScore: 0,         // Score moyen
+                                perfectGames: 0,         // Parties complétées sans erreur
+                                rankingPoints: 0,        // Points pour classement
+                                bestRank: 0,            // Meilleur rang atteint
+                                currentStreak: 0,        // Série actuelle de victoires
+                                bestStreak: 0           // Meilleure série de victoires
+                            }
                         }
                     });
-                    console.log('✅ New user saved with extended profile structure');
+                    console.log('✅ New user saved with complete ranking structure');
                 } else {
-                    // Existing user, update last login and ensure profile structure exists
+                    // ⚡ NOUVEAU : Utilisateur existant - s'assurer que les champs ranking existent
                     const userData = userDoc.data();
                     const updateData = {
                         lastLogin: new Date()
@@ -1630,8 +1791,67 @@
                         };
                     }
                     
+                    // ⚡ NOUVEAU : S'assurer que la structure ranking existe
+                    if (!userData.gameStats?.ranking) {
+                        updateData['gameStats.ranking'] = {
+                            totalScore: 0,
+                            averageScore: 0,
+                            perfectGames: 0,
+                            rankingPoints: 0,
+                            bestRank: 0,
+                            currentStreak: 0,
+                            bestStreak: 0
+                        };
+                    }
+                    
+                    // ⚡ NOUVEAU : S'assurer que tous les champs gameStats existent
+                    if (!userData.gameStats) {
+                        updateData.gameStats = {
+                            totalGamesPlayed: 0,
+                            totalGamesWon: 0,
+                            totalTimeSpent: 0,
+                            averageTime: 0,
+                            averageScore: 0,
+                            bestScores: {
+                                easy: 0,
+                                medium: 0,
+                                hard: 0,
+                                expert: 0,
+                                master: 0
+                            },
+                            practiceGames: 0,
+                            rankedGames: 0,
+                            level: 'Beginner',
+                            currentPerformance: 0,
+                            lastPlayed: new Date(),
+                            gamesCompleted: 0,
+                            gamesAbandoned: 0,
+                            gamesDefeated: 0,
+                            ranking: {
+                                totalScore: 0,
+                                averageScore: 0,
+                                perfectGames: 0,
+                                rankingPoints: 0,
+                                bestRank: 0,
+                                currentStreak: 0,
+                                bestStreak: 0
+                            }
+                        };
+                    } else {
+                        // Ajouter seulement les champs manquants
+                        if (userData.gameStats.gamesCompleted === undefined) {
+                            updateData['gameStats.gamesCompleted'] = 0;
+                        }
+                        if (userData.gameStats.gamesAbandoned === undefined) {
+                            updateData['gameStats.gamesAbandoned'] = 0;
+                        }
+                        if (userData.gameStats.gamesDefeated === undefined) {
+                            updateData['gameStats.gamesDefeated'] = 0;
+                        }
+                    }
+                    
                     await setDoc(userRef, updateData, { merge: true });
-                    console.log('✅ User login updated and profile structure ensured');
+                    console.log('✅ Existing user updated with ranking structure compatibility');
                 }
             } catch (error) {
                 console.error('❌ Error saving user to database:', error);
@@ -1774,6 +1994,7 @@
                 }
             }
         }
+        
         // ============= FORM HANDLING =============
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize Firebase Auth

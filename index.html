@@ -5,12 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Suirodoku.com</title>
     
-    <!-- FAVICON -->
+    <!-- FAVICON - Chemins uniformisés (Fix Bug #3) -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    
+    <!-- Fallback pour utilisateurs sans JavaScript (Fix Bug #10) -->
+    <noscript>
+        <style>
+            .no-js-warning {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: #ff3b30;
+                color: white;
+                padding: 12px;
+                text-align: center;
+                z-index: 9999;
+                font-weight: 600;
+            }
+            .no-js-nav {
+                position: fixed;
+                top: 40px;
+                left: 0;
+                right: 0;
+                background: rgba(0,0,0,0.9);
+                color: white;
+                padding: 16px;
+                text-align: center;
+                z-index: 9998;
+            }
+            .no-js-nav a {
+                color: #007aff;
+                text-decoration: none;
+                margin: 0 16px;
+                font-weight: 600;
+            }
+        </style>
+        <div class="no-js-warning">⚠️ JavaScript is required for the full Suirodoku experience</div>
+        <div class="no-js-nav">
+            <a href="./auth/">Login</a> |
+            <a href="./tutorial/">How to Play</a> |
+            <a href="./leaderboard/">Leaderboards</a> |
+            <a href="./legal/">Legal</a>
+        </div>
+    </noscript>
 </head>
 <body>
     <div class="main-content">
@@ -21,24 +63,24 @@
             <div class="error-subtext">Click "Correct" to clear the error and continue</div>
         </div>
 
-        <!-- Header - CSS injecté automatiquement par auth-header.js -->
+        <!-- Header - CSS injecté automatiquement par shared/auth-header.js -->
         <div class="header">
-            <div class="logo" onclick="goToHome()">Suirodoku.com</div>
+            <div class="logo" onclick="window.goToHome()">Suirodoku.com</div>
             
             <!-- Navigation Menu (Desktop) -->
             <nav class="nav-menu">
-                <button class="nav-btn" onclick="navigateTo('tutorial')">
+                <button class="nav-btn" onclick="window.navigateTo('tutorial')">
                     How to Play
                 </button>
                 
-                <button class="nav-btn" onclick="navigateTo('leaderboard')">
+                <button class="nav-btn" onclick="window.navigateTo('leaderboard')">
                     Leaderboards
                 </button>
             </nav>
             
             <!-- Auth Buttons (Desktop) - Dynamique selon l'état de connexion -->
             <div class="auth-buttons" id="desktop-auth-buttons">
-                <!-- Contenu dynamique injecté par auth-header.js -->
+                <!-- Contenu dynamique injecté par shared/auth-header.js -->
             </div>
         </div>
 
@@ -277,75 +319,39 @@
                     © 2024 Suirodoku.com. All rights reserved.
                 </div>
                 <div class="footer-legal">
-                    <a onclick="navigateTo('legal')">Privacy Policy</a>
-                    <a onclick="navigateTo('legal')">Terms of Service</a>
-                    <a onclick="navigateTo('legal')">Contact</a>
+                    <a onclick="window.navigateTo('legal')">Privacy Policy</a>
+                    <a onclick="window.navigateTo('legal')">Terms of Service</a>
+                    <a onclick="window.navigateTo('legal')">Contact</a>
                 </div>
             </div>
         </div>
     </footer>
 
-    <!-- Scripts optimisés - Plus de duplication ! -->
-    <script src="firebase-config.js"></script>
-    <script src="auth-utils.js"></script>
-    <script src="auth-header.js"></script>
-    <script src="menu.js"></script>
+    <!-- Scripts avec ordre corrigé (Fix Bug #1 + #2) -->
+    <script src="shared/firebase-manager.js"></script>
+    <script src="shared/auth-utils.js"></script>
+    <script src="shared/auth-header.js"></script>
+    <script src="mobile/menu.js"></script>
     <script src="script.js"></script>
     
-    <!-- Code spécifique à la page principale uniquement -->
+    <!-- Initialisation simplifiée -->
     <script>
-        // Initialisation au chargement de la page
         document.addEventListener('DOMContentLoaded', function() {
-            // Afficher l'état par défaut (non connecté) en attendant Firebase
-            if (typeof window.AuthHeader !== 'undefined') {
-                window.AuthHeader.init();
-            }
-            
-            // Initialiser Firebase Auth quand disponible
-            function initAuth() {
-                if (typeof window.firebaseAuth !== 'undefined') {
-                    const { auth, onAuthStateChanged } = window.firebaseAuth;
-                    
-                    onAuthStateChanged(auth, (user) => {
-                        if (typeof window.AuthHeader !== 'undefined') {
-                            window.AuthHeader.updateAuthState(user);
-                        }
-                        if (typeof window.MobileMenu !== 'undefined') {
-                            window.MobileMenu.syncWithAuthHeader(user);
-                        }
-                    });
-                } else {
-                    // Firebase pas encore chargé, réessayer
-                    setTimeout(initAuth, 100);
+            // Utiliser Firebase Manager centralisé (Fix Bug #1)
+            window.FirebaseManager.onAuthStateChanged((user, userData) => {
+                // Mettre à jour header auth
+                if (typeof window.AuthHeader !== 'undefined') {
+                    window.AuthHeader.updateAuthState(user, userData);
                 }
-            }
+                
+                // Synchroniser avec menu mobile
+                if (typeof window.MobileMenu !== 'undefined') {
+                    window.MobileMenu.syncWithAuthHeader(userData || user);
+                }
+            });
             
-            initAuth();
+            console.log('✅ Page d\'accueil initialisée avec Firebase Manager');
         });
-        
-        // Fonctions de navigation globales (utilisées par le HTML existant)
-        function navigateTo(page) {
-            const routes = {
-                'home': './',
-                'auth': './auth/',
-                'profile': './profile/',
-                'stats': './stats/',
-                'settings': './settings/',
-                'tutorial': './tutorial/',
-                'leaderboard': './leaderboard/',
-                'legal': './legal/'
-            };
-            
-            if (routes[page]) {
-                window.location.href = routes[page];
-            } else {
-                console.warn(`Route inconnue: ${page}`);
-            }
-        }
-        
-        function goToHome() {
-            window.location.href = './';
-        }
     </script>
 </body>
 </html>

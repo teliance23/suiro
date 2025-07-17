@@ -5,14 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings | Suirodoku.com</title>
     
-    <!-- FAVICON -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <style>
-        /* ============= RESET ET BASE - STYLES SPÉCIFIQUES SETTINGS ============= */
         * {
             margin: 0;
             padding: 0;
@@ -33,7 +31,6 @@
             overflow-x: hidden;
         }
 
-        /* Allow text selection for form inputs */
         input, textarea, [contenteditable] {
             -webkit-user-select: text;
             -moz-user-select: text;
@@ -42,7 +39,6 @@
             caret-color: #007aff;
         }
 
-        /* ============= HEADER BASIQUE (styles injectés par auth-header.js) ============= */
         .header {
             display: flex;
             justify-content: flex-end;
@@ -107,7 +103,6 @@
             gap: 12px;
         }
 
-        /* ============= SETTINGS CONTAINER ============= */
         .settings-container {
             min-height: calc(100vh - 140px);
             padding: 40px 20px;
@@ -143,7 +138,6 @@
             margin-bottom: 24px;
         }
 
-        /* ============= SETTINGS SECTIONS ============= */
         .settings-section {
             background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(20px);
@@ -173,9 +167,9 @@
             font-size: 24px;
         }
 
-        /* ============= FORM ELEMENTS ============= */
         .form-group {
             margin-bottom: 24px;
+            position: relative;
         }
 
         .form-label {
@@ -213,6 +207,16 @@
             background-color: #f8f9fa;
             color: #6c757d;
             cursor: not-allowed;
+        }
+
+        .form-input.error {
+            border-color: #ff3b30;
+            box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.1);
+        }
+
+        .form-input.success {
+            border-color: #28a745;
+            box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
         }
 
         .form-select {
@@ -260,7 +264,35 @@
             color: #8e8e93;
         }
 
-        /* ============= RADIO BUTTONS ============= */
+        .form-feedback {
+            position: absolute;
+            bottom: -20px;
+            left: 0;
+            font-size: 12px;
+            font-weight: 500;
+            margin-top: 4px;
+            opacity: 0;
+            transform: translateY(-5px);
+            transition: all 0.3s ease;
+        }
+
+        .form-feedback.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .form-feedback.error {
+            color: #ff3b30;
+        }
+
+        .form-feedback.success {
+            color: #28a745;
+        }
+
+        .form-feedback.checking {
+            color: #8e8e93;
+        }
+
         .radio-group {
             display: flex;
             gap: 16px;
@@ -300,7 +332,6 @@
             color: #1c1c1e;
         }
 
-        /* ============= AVATAR SECTION ============= */
         .avatar-section {
             display: flex;
             align-items: center;
@@ -339,7 +370,6 @@
             color: #8e8e93;
         }
 
-        /* ============= BUTTONS ============= */
         .btn {
             padding: 16px 32px;
             border-radius: 12px;
@@ -390,31 +420,21 @@
             transform: scale(0.95);
         }
 
-        /* ============= ACTIONS SECTION ============= */
-        .actions-section {
-            display: flex;
-            gap: 16px;
-            justify-content: flex-end;
-            margin-top: 32px;
+        .btn-loading {
+            position: relative;
+            color: transparent;
         }
 
-        /* ============= LOADING STATE ============= */
-        .loading-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 400px;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #e5e5ea;
-            border-top: 4px solid #007aff;
+        .btn-loading::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
             border-radius: 50%;
             animation: spin 1s linear infinite;
+            color: white;
         }
 
         @keyframes spin {
@@ -422,16 +442,14 @@
             100% { transform: rotate(360deg); }
         }
 
-        .loading-text {
-            color: #8e8e93;
-            font-size: 16px;
-            font-weight: 500;
+        .actions-section {
+            display: flex;
+            gap: 16px;
+            justify-content: flex-end;
+            margin-top: 32px;
         }
 
-        /* ============= SUCCESS/ERROR MESSAGES ============= */
-        .success-message {
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
+        .alert {
             padding: 16px 20px;
             border-radius: 12px;
             margin-bottom: 24px;
@@ -439,39 +457,40 @@
             display: none;
             align-items: center;
             gap: 12px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .alert.show {
+            display: flex;
+        }
+
+        .alert-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
         }
 
-        .success-message.show {
-            display: flex;
-        }
-
-        .success-icon {
-            font-size: 20px;
-        }
-
-        .error-message {
+        .alert-error {
             background: linear-gradient(135deg, #ff3b30, #d70015);
             color: white;
-            padding: 16px 20px;
-            border-radius: 12px;
-            margin-bottom: 24px;
-            font-weight: 600;
-            display: none;
-            align-items: center;
-            gap: 12px;
             box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
         }
 
-        .error-message.show {
-            display: flex;
-        }
-
-        .error-icon {
+        .alert-icon {
             font-size: 20px;
         }
 
-        /* ============= FOOTER ============= */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         .footer {
             position: fixed;
             bottom: 0;
@@ -493,23 +512,6 @@
             height: 8px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             cursor: pointer;
-            position: relative;
-        }
-
-        .footer-tab::after {
-            content: '⌃';
-            position: absolute;
-            top: -12px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: #4a5568;
-            font-size: 12px;
-            opacity: 0.6;
-            transition: opacity 0.3s ease;
-        }
-
-        .footer:hover .footer-tab::after {
-            opacity: 0;
         }
 
         .footer-content {
@@ -545,7 +547,6 @@
             padding-bottom: 20px;
         }
 
-        /* ============= RESPONSIVE ============= */
         @media (max-width: 768px) {
             .header {
                 display: none;
@@ -622,56 +623,43 @@
 </head>
 <body>
     <div class="main-content">
-        <!-- Header - CSS complexe injecté par auth-header.js -->
         <div class="header">
-            <div class="logo" onclick="goToHome()">Suirodoku.com</div>
+            <div class="logo" onclick="window.goToHome()">Suirodoku.com</div>
             
-            <!-- Navigation Menu (Desktop) -->
             <nav class="nav-menu">
-                <button class="nav-btn" onclick="navigateTo('tutorial')">
+                <button class="nav-btn" onclick="window.navigateTo('tutorial')">
                     How to Play
                 </button>
                 
-                <button class="nav-btn" onclick="navigateTo('leaderboard')">
+                <button class="nav-btn" onclick="window.navigateTo('leaderboard')">
                     Leaderboards
                 </button>
             </nav>
             
-            <!-- Auth Buttons (Desktop) - Dynamique selon l'état de connexion -->
             <div class="auth-buttons" id="desktop-auth-buttons">
-                <!-- Contenu dynamique injecté par auth-header.js -->
             </div>
         </div>
 
-        <!-- Settings Container -->
         <div class="settings-container">
-            <!-- Loading State -->
-            <div class="loading-container" id="loading-container">
-                <div class="spinner"></div>
-                <div class="loading-text">Loading your settings...</div>
+            <div id="loading-container">
             </div>
 
-            <!-- Settings Content (initially hidden) -->
             <div id="settings-content" style="display: none;">
-                <!-- Settings Header -->
                 <div class="settings-header">
                     <h1 class="settings-title">Account Settings</h1>
                     <p class="settings-subtitle">Manage your profile and preferences</p>
                 </div>
 
-                <!-- Success Message -->
-                <div class="success-message" id="success-message">
-                    <span class="success-icon">✅</span>
+                <div class="alert alert-success" id="success-alert">
+                    <span class="alert-icon">✅</span>
                     <span id="success-text">Settings saved successfully!</span>
                 </div>
 
-                <!-- Error Message -->
-                <div class="error-message" id="error-message">
-                    <span class="error-icon">❌</span>
+                <div class="alert alert-error" id="error-alert">
+                    <span class="alert-icon">❌</span>
                     <span id="error-text">Error saving settings. Please try again.</span>
                 </div>
 
-                <!-- Profile Section -->
                 <div class="settings-section">
                     <h2 class="section-title">
                         <span class="section-icon">👤</span>
@@ -693,7 +681,8 @@
 
                     <div class="form-group">
                         <label class="form-label" for="gamertag">Gamertag (unique)</label>
-                        <input type="text" id="gamertag" class="form-input" placeholder="Enter your gamertag">
+                        <input type="text" id="gamertag" class="form-input" placeholder="Enter your gamertag" maxlength="20">
+                        <div class="form-feedback" id="gamertag-feedback"></div>
                     </div>
 
                     <div class="form-group">
@@ -744,11 +733,10 @@
 
                     <div class="form-group">
                         <label class="form-label" for="bio">Bio (optional)</label>
-                        <textarea id="bio" class="form-textarea" placeholder="Tell us about yourself..."></textarea>
+                        <textarea id="bio" class="form-textarea" placeholder="Tell us about yourself..." maxlength="500"></textarea>
                     </div>
                 </div>
 
-                <!-- Game Preferences Section -->
                 <div class="settings-section">
                     <h2 class="section-title">
                         <span class="section-icon">🎮</span>
@@ -781,7 +769,6 @@
                     </div>
                 </div>
 
-                <!-- Privacy Section -->
                 <div class="settings-section">
                     <h2 class="section-title">
                         <span class="section-icon">🔒</span>
@@ -817,12 +804,11 @@
                     </div>
                 </div>
 
-                <!-- Actions -->
                 <div class="actions-section">
-                    <button class="btn btn-secondary" onclick="resetToDefaults()">
+                    <button class="btn btn-secondary" onclick="SettingsManager.resetToDefaults()">
                         Reset to Defaults
                     </button>
-                    <button class="btn btn-primary" onclick="saveSettings()" id="save-btn">
+                    <button class="btn btn-primary" onclick="SettingsManager.saveSettings()" id="save-btn">
                         Save Settings
                     </button>
                 </div>
@@ -830,7 +816,6 @@
         </div>
     </div>
 
-    <!-- Footer -->
     <footer class="footer">
         <div class="footer-tab"></div>
         <div class="footer-content">
@@ -839,317 +824,121 @@
                     © 2024 Suirodoku.com. All rights reserved.
                 </div>
                 <div class="footer-legal">
-                    <a onclick="navigateTo('legal')">Privacy Policy</a>
-                    <a onclick="navigateTo('legal')">Terms of Service</a>
-                    <a onclick="navigateTo('legal')">Contact</a>
+                    <a onclick="window.navigateTo('legal')">Privacy Policy</a>
+                    <a onclick="window.navigateTo('legal')">Terms of Service</a>
+                    <a onclick="window.navigateTo('legal')">Contact</a>
                 </div>
             </div>
         </div>
     </footer>
 
-    <!-- Scripts optimisés - Plus de duplication ! -->
-    <script src="../firebase-config.js"></script>
-    <script src="../auth-utils.js"></script>
-    <script src="../auth-header.js"></script>
-    <script src="../menu.js"></script>
+    <script src="../shared/firebase-manager.js"></script>
+    <script src="../shared/auth-utils.js"></script>
+    <script src="../shared/auth-header.js"></script>
+    <script src="../mobile/menu.js"></script>
     
-    <!-- Code spécifique à Settings uniquement -->
     <script>
-        // ============= VARIABLES GLOBALES SETTINGS ============= 
-        let currentUser = null;
-        let userData = null;
-        let isSaving = false;
-
-        // ============= FIREBASE AUTH SETTINGS =============
-        function initializeSettingsAuth() {
-            if (typeof window.firebaseAuth === 'undefined') {
-                setTimeout(initializeSettingsAuth, 100);
-                return;
-            }
-
-            const { auth, onAuthStateChanged } = window.firebaseAuth;
-
-            onAuthStateChanged(auth, (user) => {
-                currentUser = user;
-                if (user) {
-                    console.log('User authenticated:', user.email);
-                    loadUserSettings(user);
-                    
-                    // Mettre à jour header et menu
-                    if (typeof window.AuthHeader !== 'undefined') {
-                        window.AuthHeader.updateAuthState(user);
-                    }
-                    if (typeof window.MobileMenu !== 'undefined') {
-                        window.MobileMenu.syncWithAuthHeader(user);
-                    }
-                } else {
-                    console.log('User not authenticated, redirecting...');
-                    window.location.href = '../auth/';
-                }
-            });
-        }
-
-        // ============= LOAD USER SETTINGS =============
-        async function loadUserSettings(user) {
-            try {
-                // Utiliser getUserData depuis auth-utils.js
-                if (typeof window.AuthUtils !== 'undefined') {
-                    userData = await window.AuthUtils.getUserData(user);
-                } else {
-                    // Fallback si auth-utils pas disponible
-                    userData = await getUserData(user);
-                }
-                
-                // Update UI with user data
-                updateSettingsUI(userData);
-                
-                // Hide loading and show content
-                document.getElementById('loading-container').style.display = 'none';
-                document.getElementById('settings-content').style.display = 'block';
-
-            } catch (error) {
-                console.error('Error loading user settings:', error);
-                showError('Failed to load settings. Please try again.');
-            }
-        }
-
-        // ============= UPDATE SETTINGS UI =============
-        function updateSettingsUI(userData) {
-            // Avatar and basic info
-            const displayName = getDisplayName(userData) || 'Anonymous Player';
-            const avatarInitial = displayName.charAt(0).toUpperCase();
+        const SettingsManager = {
+            currentUser: null,
+            userData: null,
+            isSaving: false,
+            validationCache: new Map(),
             
-            document.getElementById('avatar-display').textContent = avatarInitial;
-            document.getElementById('avatar-name').textContent = displayName;
-            document.getElementById('avatar-email').textContent = userData.email || 'No email';
-
-            // Profile fields
-            document.getElementById('display-name').value = userData.displayName || '';
-            document.getElementById('gamertag').value = userData.profile?.gamertag || '';
-            document.getElementById('nationality').value = userData.profile?.nationality || '';
-            document.getElementById('bio').value = userData.profile?.bio || '';
-
-            // Display preference
-            const displayPref = userData.profile?.displayPreference || 'realname';
-            document.getElementById(`display-${displayPref}`).checked = true;
-            updateRadioSelection('display-preference', displayPref);
-
-            // Game preferences
-            document.getElementById('default-difficulty').value = userData.preferences?.defaultDifficulty || 'easy';
-            
-            const defaultMode = userData.preferences?.defaultMode || 'practice';
-            document.getElementById(`mode-${defaultMode}`).checked = true;
-            updateRadioSelection('default-mode', defaultMode);
-
-            // Privacy settings
-            const visibility = userData.privacy?.profileVisibility || 'public';
-            document.getElementById(`visibility-${visibility}`).checked = true;
-            updateRadioSelection('profile-visibility', visibility);
-
-            const showLeaderboard = userData.privacy?.showInLeaderboards !== false ? 'true' : 'false';
-            document.getElementById(`leaderboard-${showLeaderboard}`).checked = true;
-            updateRadioSelection('show-leaderboard', showLeaderboard);
-        }
-
-        // ============= RADIO BUTTON HELPERS =============
-        function updateRadioSelection(groupName, value) {
-            document.querySelectorAll(`input[name="${groupName}"]`).forEach(radio => {
-                const label = radio.closest('.radio-item');
-                if (radio.value === value) {
-                    label.classList.add('selected');
-                } else {
-                    label.classList.remove('selected');
-                }
-            });
-        }
-
-        // ============= SAVE SETTINGS =============
-        async function saveSettings() {
-            if (isSaving) return;
-            
-            isSaving = true;
-            const saveBtn = document.getElementById('save-btn');
-            const originalText = saveBtn.textContent;
-            
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving...';
-            
-            try {
-                const { auth, db, doc, updateDoc, collection, query, where, getDocs } = window.firebaseAuth;
-                const user = auth.currentUser;
-                
-                if (!user) {
-                    throw new Error('User not authenticated');
-                }
-
-                // Collect form data
-                const gamertag = document.getElementById('gamertag').value.trim();
-                const nationality = document.getElementById('nationality').value;
-                
-                // Validation
-                if (!gamertag || gamertag.length < 3) {
-                    throw new Error('Gamertag must be at least 3 characters long');
-                }
-                
-                if (!/^[a-zA-Z0-9_-]+$/.test(gamertag)) {
-                    throw new Error('Gamertag can only contain letters, numbers, underscore and dash');
-                }
-                
-                if (!nationality) {
-                    throw new Error('Please select your nationality');
-                }
-                
-                // Vérifier l'unicité du gamertag
+            init: function() {
                 try {
-                    const gamertagQuery = query(
-                        collection(db, 'users'), 
-                        where('profile.gamertag', '==', gamertag)
-                    );
-                    const existingUsers = await getDocs(gamertagQuery);
-                    
-                    if (!existingUsers.empty && existingUsers.docs[0].id !== user.uid) {
-                        throw new Error('This gamertag is already taken');
-                    }
+                    this.setupAuthentication();
+                    this.setupValidation();
+                    this.setupEventListeners();
                 } catch (error) {
-                    console.error('Error checking gamertag:', error);
+                    console.error('Error initializing Settings:', error);
+                    this.showError('Failed to initialize settings page');
                 }
+            },
 
-                const formData = {
-                    profile: {
-                        gamertag: gamertag,
-                        nationality: nationality,
-                        bio: document.getElementById('bio').value.trim(),
-                        displayPreference: document.querySelector('input[name="display-preference"]:checked')?.value || 'realname',
-                        isProfileComplete: true,
-                        joinDate: userData.profile?.joinDate || new Date()
-                    },
-                    preferences: {
-                        defaultDifficulty: document.getElementById('default-difficulty').value,
-                        defaultMode: document.querySelector('input[name="default-mode"]:checked')?.value || 'practice'
-                    },
-                    privacy: {
-                        profileVisibility: document.querySelector('input[name="profile-visibility"]:checked')?.value || 'public',
-                        showInLeaderboards: document.querySelector('input[name="show-leaderboard"]:checked')?.value === 'true'
-                    },
-                    updatedAt: new Date()
+            setupAuthentication: function() {
+                const waitForFirebase = () => {
+                    if (typeof window.FirebaseManager !== 'undefined') {
+                        this.initFirebaseAuth();
+                    } else {
+                        setTimeout(waitForFirebase, 100);
+                    }
                 };
+                waitForFirebase();
+            },
 
-                // Update Firestore
-                const userRef = doc(db, 'users', user.uid);
-                await updateDoc(userRef, formData);
-
-                // Update local userData
-                userData = { ...userData, ...formData };
-
-                // Show success message
-                showSuccess('Settings saved successfully!');
-                
-                // Update header to reflect changes
-                if (typeof window.AuthHeader !== 'undefined') {
-                    window.AuthHeader.updateAuthState(user);
+            initFirebaseAuth: function() {
+                try {
+                    window.FirebaseManager.onAuthStateChanged(async (user, userData) => {
+                        this.currentUser = user;
+                        
+                        if (user) {
+                            await this.loadUserSettings(user);
+                            
+                            if (typeof window.AuthHeader !== 'undefined' && window.AuthHeader.updateAuthState) {
+                                window.AuthHeader.updateAuthState(user, userData);
+                            }
+                        } else {
+                            this.redirectToAuth();
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error initFirebaseAuth:', error);
+                    this.showError('Authentication error');
+                    this.redirectToAuth();
                 }
+            },
 
-                console.log('✅ Settings saved successfully');
+            redirectToAuth: function() {
+                setTimeout(() => {
+                    window.navigateTo('auth');
+                }, 1000);
+            },
 
-            } catch (error) {
-                console.error('❌ Error saving settings:', error);
-                showError(error.message || 'Failed to save settings. Please try again.');
-            } finally {
-                isSaving = false;
-                saveBtn.disabled = false;
-                saveBtn.textContent = originalText;
-            }
-        }
-
-        // ============= RESET TO DEFAULTS =============
-        function resetToDefaults() {
-            const confirmed = confirm('Are you sure you want to reset all settings to default values?');
-            if (!confirmed) return;
-
-            // Reset form to defaults
-            document.getElementById('gamertag').value = '';
-            document.getElementById('nationality').value = '';
-            document.getElementById('bio').value = '';
-            document.getElementById('default-difficulty').value = 'easy';
-            
-            // Reset radio buttons
-            document.getElementById('display-realname').checked = true;
-            updateRadioSelection('display-preference', 'realname');
-            
-            document.getElementById('mode-practice').checked = true;
-            updateRadioSelection('default-mode', 'practice');
-            
-            document.getElementById('visibility-public').checked = true;
-            updateRadioSelection('profile-visibility', 'public');
-            
-            document.getElementById('leaderboard-yes').checked = true;
-            updateRadioSelection('show-leaderboard', 'true');
-
-            showSuccess('Settings reset to default values');
-        }
-
-        // ============= MESSAGE HELPERS =============
-        function showSuccess(message) {
-            const successEl = document.getElementById('success-message');
-            const textEl = document.getElementById('success-text');
-            
-            textEl.textContent = message;
-            successEl.classList.add('show');
-            
-            setTimeout(() => {
-                successEl.classList.remove('show');
-            }, 3000);
-        }
-
-        function showError(message) {
-            const errorEl = document.getElementById('error-message');
-            const textEl = document.getElementById('error-text');
-            
-            textEl.textContent = message;
-            errorEl.classList.add('show');
-            
-            setTimeout(() => {
-                errorEl.classList.remove('show');
-            }, 5000);
-        }
-
-        // ============= NAVIGATION FUNCTIONS =============
-        function navigateTo(page) {
-            const routes = {
-                'home': '../',
-                'profile': '../profile/',
-                'stats': '../stats/',
-                'settings': '../settings/',
-                'auth': '../auth/',
-                'tutorial': '../tutorial/',
-                'leaderboard': '../leaderboard/',
-                'legal': '../legal/'
-            };
-            
-            if (routes[page]) {
-                window.location.href = routes[page];
-            } else {
-                console.warn(`Route inconnue: ${page}`);
-            }
-        }
-
-        function goToHome() {
-            window.location.href = '../';
-        }
-
-        // ============= FONCTIONS UTILITAIRES (fallback si auth-utils indisponible) =============
-        async function getUserData(user) {
-            try {
-                const { db, doc, getDoc, setDoc } = window.firebaseAuth;
-                const userRef = doc(db, 'users', user.uid);
-                const userDoc = await getDoc(userRef);
-                
-                if (userDoc.exists()) {
-                    return { ...user, ...userDoc.data() };
+            loadUserSettings: async function(user) {
+                try {
+                    this.userData = await this.getUserDataSafely(user);
+                    this.updateSettingsUI(this.userData);
+                    
+                    window.LoadingManager.hide(document.getElementById('loading-container'));
+                    document.getElementById('settings-content').style.display = 'block';
+                } catch (error) {
+                    console.error('Error loadUserSettings:', error);
+                    this.showError('Failed to load settings');
                 }
-                
-                // Créer un profil par défaut si aucune donnée
-                const defaultProfile = {
+            },
+
+            getUserDataSafely: async function(user) {
+                try {
+                    if (window.AuthUtils && window.AuthUtils.getUserData) {
+                        return await window.AuthUtils.getUserData(user);
+                    }
+                    
+                    if (typeof window.getUserData === 'function') {
+                        return await window.getUserData(user);
+                    }
+                    
+                    if (window.FirebaseManager && window.FirebaseManager.firebaseAuth && window.FirebaseManager.db) {
+                        const userRef = window.FirebaseManager.firebaseAuth.doc(window.FirebaseManager.db, 'users', user.uid);
+                        const userDoc = await window.FirebaseManager.firebaseAuth.getDoc(userRef);
+                        
+                        if (userDoc.exists()) {
+                            return { ...user, ...userDoc.data() };
+                        } else {
+                            const defaultProfile = this.createDefaultProfile(user);
+                            await window.FirebaseManager.firebaseAuth.setDoc(userRef, defaultProfile);
+                            return { ...user, ...defaultProfile };
+                        }
+                    }
+                    
+                    return user;
+                } catch (error) {
+                    console.error('Error getUserDataSafely:', error);
+                    return user;
+                }
+            },
+
+            createDefaultProfile: function(user) {
+                return {
                     displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
                     email: user.email,
                     profile: {
@@ -1167,45 +956,349 @@
                     privacy: {
                         profileVisibility: 'public',
                         showInLeaderboards: true
-                    }
+                    },
+                    createdAt: new Date(),
+                    updatedAt: new Date()
                 };
-                
-                await setDoc(userRef, defaultProfile);
-                return { ...user, ...defaultProfile };
-                
-            } catch (error) {
-                console.error('Error fetching user data:', error);
-                throw new Error('Failed to load user data');
-            }
-        }
+            },
 
-        function getDisplayName(userData) {
-            if (userData?.profile?.displayPreference === 'gamertag' && userData?.profile?.gamertag) {
-                return userData.profile.gamertag;
-            }
-            return userData?.displayName || userData?.email?.split('@')[0] || 'Anonymous';
-        }
+            updateSettingsUI: function(userData) {
+                try {
+                    window.LoadingManager.show(document.getElementById('loading-container'), 'Loading your settings...');
+                    
+                    const displayName = window.FirebaseManager.getDisplayName(userData) || 'Anonymous Player';
+                    const avatarInitial = displayName.charAt(0).toUpperCase();
+                    
+                    document.getElementById('avatar-display').textContent = avatarInitial;
+                    document.getElementById('avatar-name').textContent = displayName;
+                    document.getElementById('avatar-email').textContent = userData.email || 'No email';
 
-        // ============= INITIALIZATION =============
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize Firebase Auth
-            initializeSettingsAuth();
+                    document.getElementById('display-name').value = userData.displayName || '';
+                    document.getElementById('gamertag').value = userData.profile?.gamertag || '';
+                    document.getElementById('nationality').value = userData.profile?.nationality || '';
+                    document.getElementById('bio').value = userData.profile?.bio || '';
 
-            // Radio button handlers
-            document.querySelectorAll('input[type="radio"]').forEach(radio => {
-                radio.addEventListener('change', function() {
-                    updateRadioSelection(this.name, this.value);
-                });
-            });
+                    const displayPref = userData.profile?.displayPreference || 'realname';
+                    document.getElementById(`display-${displayPref}`).checked = true;
+                    this.updateRadioSelection('display-preference', displayPref);
 
-            // Keyboard shortcut for save
-            document.addEventListener('keydown', function(e) {
-                if (e.ctrlKey && e.key === 's') {
-                    e.preventDefault();
-                    saveSettings();
+                    document.getElementById('default-difficulty').value = userData.preferences?.defaultDifficulty || 'easy';
+                    
+                    const defaultMode = userData.preferences?.defaultMode || 'practice';
+                    document.getElementById(`mode-${defaultMode}`).checked = true;
+                    this.updateRadioSelection('default-mode', defaultMode);
+
+                    const visibility = userData.privacy?.profileVisibility || 'public';
+                    document.getElementById(`visibility-${visibility}`).checked = true;
+                    this.updateRadioSelection('profile-visibility', visibility);
+
+                    const showLeaderboard = userData.privacy?.showInLeaderboards !== false ? 'true' : 'false';
+                    document.getElementById(`leaderboard-${showLeaderboard}`).checked = true;
+                    this.updateRadioSelection('show-leaderboard', showLeaderboard);
+                } catch (error) {
+                    console.error('Error updateSettingsUI:', error);
                 }
-            });
+            },
+
+            updateRadioSelection: function(groupName, value) {
+                try {
+                    document.querySelectorAll(`input[name="${groupName}"]`).forEach(radio => {
+                        const label = radio.closest('.radio-item');
+                        if (radio.value === value) {
+                            label.classList.add('selected');
+                        } else {
+                            label.classList.remove('selected');
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error updateRadioSelection:', error);
+                }
+            },
+
+            setupValidation: function() {
+                const gamertagInput = document.getElementById('gamertag');
+                if (gamertagInput) {
+                    let debounceTimer;
+                    gamertagInput.addEventListener('input', (e) => {
+                        clearTimeout(debounceTimer);
+                        debounceTimer = setTimeout(() => {
+                            this.validateGamertag(e.target.value);
+                        }, 500);
+                    });
+                }
+            },
+
+            validateGamertag: async function(gamertag) {
+                const input = document.getElementById('gamertag');
+                const feedback = document.getElementById('gamertag-feedback');
+                
+                if (!input || !feedback) return;
+
+                try {
+                    input.classList.remove('error', 'success');
+                    feedback.classList.remove('show', 'error', 'success', 'checking');
+
+                    if (!gamertag) return;
+
+                    if (window.AuthUtils && window.AuthUtils.validateGamertag) {
+                        const validation = window.AuthUtils.validateGamertag(gamertag);
+                        
+                        if (!validation.isValid) {
+                            this.showValidationError(input, feedback, validation.error);
+                            return;
+                        }
+
+                        if (window.AuthUtils.checkGamertagUniqueness) {
+                            this.showValidationChecking(input, feedback, 'Checking availability...');
+                            
+                            const uniqueness = await window.AuthUtils.checkGamertagUniqueness(
+                                validation.gamertag, 
+                                this.currentUser?.uid
+                            );
+                            
+                            if (!uniqueness.isUnique) {
+                                this.showValidationError(input, feedback, uniqueness.error || 'Gamertag is already taken');
+                            } else {
+                                this.showValidationSuccess(input, feedback, 'Gamertag is available');
+                            }
+                        } else {
+                            this.showValidationSuccess(input, feedback, 'Gamertag format is valid');
+                        }
+                    } else {
+                        if (gamertag.length < 3) {
+                            this.showValidationError(input, feedback, 'Gamertag must be at least 3 characters');
+                            return;
+                        }
+                        
+                        if (gamertag.length > 20) {
+                            this.showValidationError(input, feedback, 'Gamertag must be less than 20 characters');
+                            return;
+                        }
+                        
+                        if (!/^[a-zA-Z0-9_-]+$/.test(gamertag)) {
+                            this.showValidationError(input, feedback, 'Only letters, numbers, underscore and dash allowed');
+                            return;
+                        }
+
+                        this.showValidationSuccess(input, feedback, 'Gamertag format is valid');
+                    }
+                } catch (error) {
+                    console.error('Error validateGamertag:', error);
+                    this.showValidationError(input, feedback, 'Error checking availability');
+                }
+            },
+
+            showValidationError: function(input, feedback, message) {
+                input.classList.add('error');
+                feedback.textContent = message;
+                feedback.classList.add('show', 'error');
+            },
+
+            showValidationSuccess: function(input, feedback, message) {
+                input.classList.add('success');
+                feedback.textContent = message;
+                feedback.classList.add('show', 'success');
+            },
+
+            showValidationChecking: function(input, feedback, message) {
+                input.classList.remove('error', 'success');
+                feedback.textContent = message;
+                feedback.classList.add('show', 'checking');
+            },
+
+            saveSettings: async function() {
+                if (this.isSaving) return;
+                
+                this.isSaving = true;
+                const saveBtn = document.getElementById('save-btn');
+                const originalText = saveBtn.textContent;
+                
+                try {
+                    saveBtn.disabled = true;
+                    saveBtn.classList.add('btn-loading');
+                    
+                    const formData = this.collectFormData();
+                    await this.validateFormData(formData);
+                    await this.saveToFirestore(formData);
+                    
+                    this.userData = { ...this.userData, ...formData };
+                    this.showSuccess('Settings saved successfully!');
+                    
+                    if (typeof window.AuthHeader !== 'undefined' && window.AuthHeader.updateAuthState) {
+                        window.AuthHeader.updateAuthState(this.currentUser, this.userData);
+                    }
+                } catch (error) {
+                    console.error('Error saveSettings:', error);
+                    this.showError(error.message || 'Failed to save settings. Please try again.');
+                } finally {
+                    this.isSaving = false;
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove('btn-loading');
+                    saveBtn.textContent = originalText;
+                }
+            },
+
+            collectFormData: function() {
+                return {
+                    profile: {
+                        gamertag: document.getElementById('gamertag').value.trim(),
+                        nationality: document.getElementById('nationality').value,
+                        bio: document.getElementById('bio').value.trim(),
+                        displayPreference: document.querySelector('input[name="display-preference"]:checked')?.value || 'realname',
+                        isProfileComplete: true,
+                        joinDate: this.userData?.profile?.joinDate || new Date()
+                    },
+                    preferences: {
+                        defaultDifficulty: document.getElementById('default-difficulty').value,
+                        defaultMode: document.querySelector('input[name="default-mode"]:checked')?.value || 'practice'
+                    },
+                    privacy: {
+                        profileVisibility: document.querySelector('input[name="profile-visibility"]:checked')?.value || 'public',
+                        showInLeaderboards: document.querySelector('input[name="show-leaderboard"]:checked')?.value === 'true'
+                    },
+                    updatedAt: new Date()
+                };
+            },
+
+            validateFormData: async function(formData) {
+                const { gamertag, nationality } = formData.profile;
+                
+                if (window.AuthUtils && window.AuthUtils.validateGamertag) {
+                    const validation = window.AuthUtils.validateGamertag(gamertag);
+                    
+                    if (!validation.isValid) {
+                        throw new Error(validation.error);
+                    }
+                    
+                    if (window.AuthUtils.checkGamertagUniqueness) {
+                        const uniqueness = await window.AuthUtils.checkGamertagUniqueness(
+                            validation.gamertag, 
+                            this.currentUser?.uid
+                        );
+                        
+                        if (!uniqueness.isUnique) {
+                            throw new Error(uniqueness.error || 'Gamertag is already taken');
+                        }
+                    }
+                } else {
+                    if (!gamertag || gamertag.length < 3) {
+                        throw new Error('Gamertag must be at least 3 characters long');
+                    }
+                    
+                    if (gamertag.length > 20) {
+                        throw new Error('Gamertag must be less than 20 characters');
+                    }
+                    
+                    if (!/^[a-zA-Z0-9_-]+$/.test(gamertag)) {
+                        throw new Error('Gamertag can only contain letters, numbers, underscore and dash');
+                    }
+                }
+                
+                if (!nationality) {
+                    throw new Error('Please select your nationality');
+                }
+            },
+
+            saveToFirestore: async function(formData) {
+                try {
+                    if (!window.FirebaseManager || !window.FirebaseManager.firebaseAuth || !window.FirebaseManager.db) {
+                        throw new Error('Firebase not available');
+                    }
+
+                    const userRef = window.FirebaseManager.firebaseAuth.doc(window.FirebaseManager.db, 'users', this.currentUser.uid);
+                    await window.FirebaseManager.firebaseAuth.updateDoc(userRef, formData);
+                } catch (error) {
+                    console.error('Error saveToFirestore:', error);
+                    throw new Error('Failed to save to database');
+                }
+            },
+
+            resetToDefaults: function() {
+                const confirmed = confirm('Are you sure you want to reset all settings to default values?');
+                if (!confirmed) return;
+
+                try {
+                    document.getElementById('gamertag').value = '';
+                    document.getElementById('nationality').value = '';
+                    document.getElementById('bio').value = '';
+                    document.getElementById('default-difficulty').value = 'easy';
+                    
+                    document.getElementById('display-realname').checked = true;
+                    this.updateRadioSelection('display-preference', 'realname');
+                    
+                    document.getElementById('mode-practice').checked = true;
+                    this.updateRadioSelection('default-mode', 'practice');
+                    
+                    document.getElementById('visibility-public').checked = true;
+                    this.updateRadioSelection('profile-visibility', 'public');
+                    
+                    document.getElementById('leaderboard-yes').checked = true;
+                    this.updateRadioSelection('show-leaderboard', 'true');
+
+                    this.showSuccess('Settings reset to default values');
+                } catch (error) {
+                    console.error('Error resetToDefaults:', error);
+                    this.showError('Error resetting settings');
+                }
+            },
+
+            setupEventListeners: function() {
+                try {
+                    document.querySelectorAll('input[type="radio"]').forEach(radio => {
+                        radio.addEventListener('change', (e) => {
+                            this.updateRadioSelection(e.target.name, e.target.value);
+                        });
+                    });
+
+                    document.addEventListener('keydown', (e) => {
+                        if (e.ctrlKey && e.key === 's') {
+                            e.preventDefault();
+                            this.saveSettings();
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error setupEventListeners:', error);
+                }
+            },
+
+            showSuccess: function(message) {
+                const successAlert = document.getElementById('success-alert');
+                const successText = document.getElementById('success-text');
+                
+                if (successAlert && successText) {
+                    successText.textContent = message;
+                    successAlert.classList.add('show');
+                    
+                    setTimeout(() => {
+                        successAlert.classList.remove('show');
+                    }, 3000);
+                }
+            },
+
+            showError: function(message) {
+                const errorAlert = document.getElementById('error-alert');
+                const errorText = document.getElementById('error-text');
+                
+                if (errorAlert && errorText) {
+                    errorText.textContent = message;
+                    errorAlert.classList.add('show');
+                    
+                    setTimeout(() => {
+                        errorAlert.classList.remove('show');
+                    }, 5000);
+                }
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                SettingsManager.init();
+            } catch (error) {
+                console.error('Error initializing Settings page:', error);
+            }
         });
+
+        window.SettingsManager = SettingsManager;
     </script>
 </body>
 </html>

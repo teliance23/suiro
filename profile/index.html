@@ -11,6 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <style>
+        /* ============= RESET ET BASE ============= */
         * {
             margin: 0;
             padding: 0;
@@ -31,6 +32,7 @@
             overflow-x: hidden;
         }
 
+        /* ============= HEADER ============= */
         .header {
             display: flex;
             justify-content: flex-end;
@@ -95,6 +97,7 @@
             gap: 12px;
         }
 
+        /* ============= PROFILE CONTAINER ============= */
         .profile-container {
             min-height: calc(100vh - 140px);
             padding: 40px 20px;
@@ -102,6 +105,7 @@
             margin: 0 auto;
         }
 
+        /* ============= PROFILE HEADER ============= */
         .profile-header {
             background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(20px);
@@ -112,6 +116,11 @@
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
             text-align: center;
             position: relative;
+            transition: transform 0.3s ease;
+        }
+
+        .profile-header:hover {
+            transform: translateY(-2px);
         }
 
         .profile-avatar {
@@ -128,6 +137,13 @@
             margin: 0 auto 20px auto;
             border: 6px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 12px 40px rgba(102, 126, 234, 0.3);
+            overflow: hidden;
+        }
+
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
         .profile-name {
@@ -139,6 +155,7 @@
             align-items: center;
             justify-content: center;
             gap: 12px;
+            flex-wrap: wrap;
         }
 
         .profile-flag {
@@ -154,16 +171,6 @@
             color: white;
             margin-bottom: 16px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-
-        .profile-bio {
-            font-size: 16px;
-            color: #8e8e93;
-            margin-bottom: 24px;
-            line-height: 1.5;
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
         }
 
         .profile-join-date {
@@ -217,6 +224,7 @@
             transform: translateY(-1px);
         }
 
+        /* ============= STATS GRID ============= */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -286,6 +294,7 @@
             font-size: 18px;
         }
 
+        /* ============= BEST SCORES SECTION ============= */
         .best-scores {
             background: rgba(255, 255, 255, 0.98);
             backdrop-filter: blur(20px);
@@ -294,6 +303,11 @@
             padding: 32px;
             margin-bottom: 32px;
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease;
+        }
+
+        .best-scores:hover {
+            transform: translateY(-2px);
         }
 
         .section-title {
@@ -348,30 +362,72 @@
             font-style: italic;
         }
 
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #8e8e93;
+        /* ============= LOADING STATE ============= */
+        .loading-container {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            flex-direction: column;
+            gap: 16px;
         }
 
-        .empty-state-icon {
+        .loading-container.show {
+            display: flex;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e5e5ea;
+            border-top: 4px solid #007aff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #8e8e93;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        /* ============= EMPTY/ERROR STATES ============= */
+        .empty-state, .private-profile, .error-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(229, 229, 234, 0.3);
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
+        }
+
+        .empty-state-icon, .private-icon, .error-icon {
             font-size: 64px;
             margin-bottom: 16px;
             opacity: 0.5;
         }
 
-        .empty-state-title {
+        .empty-state-title, .private-title, .error-title {
             font-size: 20px;
             font-weight: 600;
             margin-bottom: 8px;
+            color: #1c1c1e;
         }
 
-        .empty-state-text {
+        .empty-state-text, .private-text, .error-text {
             font-size: 14px;
             line-height: 1.5;
+            color: #8e8e93;
+            margin-bottom: 24px;
         }
 
-        .empty-state-btn {
+        .empty-state-btn, .error-actions .profile-btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
@@ -382,14 +438,32 @@
             cursor: pointer;
             transition: all 0.3s ease;
             margin-top: 20px;
+            text-decoration: none;
+            display: inline-block;
         }
 
-        .empty-state-btn:hover {
+        .empty-state-btn:hover, .error-actions .profile-btn:hover {
             background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
         }
 
+        .error-actions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .error-state {
+            color: #ff3b30;
+        }
+
+        .error-title {
+            color: #ff3b30;
+        }
+
+        /* ============= FOOTER ============= */
         .footer {
             position: fixed;
             bottom: 0;
@@ -446,61 +520,7 @@
             padding-bottom: 20px;
         }
 
-        .private-profile {
-            text-align: center;
-            padding: 60px 20px;
-        }
-
-        .private-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-            opacity: 0.6;
-        }
-
-        .private-title {
-            font-size: 24px;
-            font-weight: 700;
-            color: #1c1c1e;
-            margin-bottom: 12px;
-        }
-
-        .private-text {
-            font-size: 16px;
-            color: #8e8e93;
-            line-height: 1.5;
-        }
-
-        .error-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #ff3b30;
-        }
-
-        .error-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-            opacity: 0.6;
-        }
-
-        .error-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 12px;
-        }
-
-        .error-text {
-            font-size: 16px;
-            line-height: 1.5;
-            margin-bottom: 24px;
-        }
-
-        .error-actions {
-            display: flex;
-            gap: 16px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
+        /* ============= RESPONSIVE ============= */
         @media (max-width: 768px) {
             .header {
                 display: none;
@@ -572,6 +592,16 @@
             .scores-grid {
                 grid-template-columns: 1fr;
             }
+
+            .profile-avatar {
+                width: 60px;
+                height: 60px;
+                font-size: 24px;
+            }
+
+            .profile-name {
+                font-size: 20px;
+            }
         }
     </style>
 </head>
@@ -595,10 +625,15 @@
         </div>
 
         <div class="profile-container">
-            <div id="loading-container">
+            <!-- Loading State -->
+            <div class="loading-container" id="loading-container">
+                <div class="spinner"></div>
+                <div class="loading-text">Loading profile...</div>
             </div>
 
+            <!-- Profile Content -->
             <div id="profile-content" style="display: none;">
+                <!-- Profile Header -->
                 <div class="profile-header">
                     <div class="profile-avatar" id="profile-avatar">?</div>
                     <div class="profile-name" id="profile-name">
@@ -606,13 +641,14 @@
                         <span class="profile-flag" id="profile-flag"></span>
                     </div>
                     <div class="profile-level" id="profile-level">Beginner</div>
-                    <div class="profile-bio" id="profile-bio"></div>
                     <div class="profile-join-date" id="profile-join-date">Member since...</div>
                     
                     <div class="profile-actions" id="profile-actions">
+                        <!-- Buttons will be injected here by JavaScript -->
                     </div>
                 </div>
 
+                <!-- Stats Grid -->
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-header">
@@ -680,6 +716,7 @@
                     </div>
                 </div>
 
+                <!-- Best Scores Section -->
                 <div class="best-scores">
                     <h2 class="section-title">
                         <span class="stat-icon">🌟</span>
@@ -710,6 +747,7 @@
                 </div>
             </div>
 
+            <!-- Empty State -->
             <div class="empty-state" id="empty-state" style="display: none;">
                 <div class="empty-state-icon">👤</div>
                 <div class="empty-state-title">No Profile Data</div>
@@ -717,12 +755,14 @@
                 <button class="empty-state-btn" onclick="window.navigateTo('home')">Start Playing</button>
             </div>
 
+            <!-- Private Profile -->
             <div class="private-profile" id="private-profile" style="display: none;">
                 <div class="private-icon">🔒</div>
                 <div class="private-title">Private Profile</div>
                 <div class="private-text">This user has set their profile to private.</div>
             </div>
 
+            <!-- Error State -->
             <div class="error-state" id="error-state" style="display: none;">
                 <div class="error-icon">❌</div>
                 <div class="error-title">Profile Not Found</div>
@@ -857,7 +897,7 @@
                 this.isLoading = true;
                 
                 try {
-                    window.LoadingManager.show(document.getElementById('loading-container'), 'Loading profile...');
+                    document.getElementById('loading-container').classList.add('show');
                     
                     if (this.profileCache.has(userId)) {
                         const cached = this.profileCache.get(userId);
@@ -928,7 +968,7 @@
 
                     this.displayProfile(profileData);
                     
-                    window.LoadingManager.hide(document.getElementById('loading-container'));
+                    document.getElementById('loading-container').classList.remove('show');
                     document.getElementById('profile-content').style.display = 'block';
                 } catch (error) {
                     console.error('Error handleProfileData:', error);
@@ -941,9 +981,18 @@
                     const displayName = window.FirebaseManager.getDisplayName(userData);
                     const avatarInitial = displayName.charAt(0).toUpperCase();
                     
-                    document.getElementById('profile-avatar').textContent = avatarInitial;
+                    // Profile Avatar
+                    const avatarElement = document.getElementById('profile-avatar');
+                    if (userData.photoURL) {
+                        avatarElement.innerHTML = `<img src="${userData.photoURL}" alt="Profile">`;
+                    } else {
+                        avatarElement.textContent = avatarInitial;
+                    }
+                    
+                    // Profile Name
                     document.getElementById('display-name').textContent = displayName;
                     
+                    // Profile Flag
                     const flagElement = document.getElementById('profile-flag');
                     if (userData.profile?.nationality) {
                         const flagEmoji = window.FirebaseManager.getFlagEmoji(userData.profile.nationality);
@@ -953,23 +1002,23 @@
                         flagElement.style.display = 'none';
                     }
 
-                    const level = this.getPlayerLevel(userData.improvedStats?.ranked?.currentRating || 0); // ✅ CHANGÉ
+                    // Player Level
+                    const level = this.getPlayerLevel(userData.improvedStats?.ranked?.currentRating || 1000);
                     const levelElement = document.getElementById('profile-level');
                     levelElement.textContent = level.name;
                     levelElement.style.background = level.color;
 
-                    const bioElement = document.getElementById('profile-bio');
-                    if (userData.profile?.bio) {
-                        bioElement.textContent = userData.profile.bio;
-                        bioElement.style.display = 'block';
-                    } else {
-                        bioElement.style.display = 'none';
-                    }
-
+                    // Join Date
                     this.displayJoinDate(userData);
+                    
+                    // Profile Actions
                     this.displayProfileActions();
-                    this.displayStats(userData.improvedStats || {}); // ✅ CHANGÉ
-                    this.displayBestScores(userData.improvedStats || {}); // ✅ CHANGÉ
+                    
+                    // Stats
+                    this.displayStats(userData.improvedStats || {});
+                    
+                    // Best Scores
+                    this.displayBestScores(userData.improvedStats || {});
                     
                 } catch (error) {
                     console.error('Error displayProfile:', error);
@@ -1025,14 +1074,13 @@
                 }
             },
 
-            // ✅ FONCTION COMPLÈTEMENT RÉÉCRITE pour improvedStats
             displayStats: function(improvedStats) {
                 try {
                     const stats = improvedStats || {};
                     const practice = stats.practice || {};
                     const ranked = stats.ranked || {};
                     
-                    // Stats générales
+                    // Game Statistics
                     document.getElementById('total-games').textContent = stats.totalGames || 0;
                     
                     const totalWins = (practice.gamesCompleted || 0) + (ranked.gamesCompleted || 0);
@@ -1051,16 +1099,15 @@
                     document.getElementById('avg-time').textContent = this.formatTime(avgTime);
                     document.getElementById('total-time').textContent = this.formatTotalTime(stats.totalPlayTime || 0);
                     
-                    // Rating comme performance (sur base 2000 = 100%)
-                    const performance = ranked.currentRating ? Math.round((ranked.currentRating / 2000) * 100) : 0;
+                    const performance = ranked.currentRating ? Math.round((ranked.currentRating / 2000) * 100) : 50;
                     document.getElementById('performance').textContent = `${performance}%`;
                     
-                    // Modes de jeu
+                    // Game Modes
                     document.getElementById('practice-games').textContent = practice.gamesPlayed || 0;
                     document.getElementById('ranked-games').textContent = ranked.gamesPlayed || 0;
                     document.getElementById('current-rating').textContent = ranked.currentRating || 1000;
                     
-                    // Last played - à implémenter si nécessaire
+                    // Last played
                     this.displayLastPlayed(stats.lastPlayed);
                 } catch (error) {
                     console.error('Error displayStats:', error);
@@ -1083,10 +1130,9 @@
                 }
             },
 
-            // ✅ FONCTION COMPLÈTEMENT RÉÉCRITE pour improvedStats
             displayBestScores: function(improvedStats) {
                 try {
-                    const bestScores = improvedStats?.practice?.bestScores || {}; // ✅ CHANGÉ
+                    const bestScores = improvedStats?.practice?.bestScores || {};
                     const difficulties = ['easy', 'medium', 'hard', 'expert', 'master'];
                     
                     difficulties.forEach(difficulty => {
@@ -1107,12 +1153,12 @@
             },
 
             showPrivateProfile: function() {
-                window.LoadingManager.hide(document.getElementById('loading-container'));
+                document.getElementById('loading-container').classList.remove('show');
                 document.getElementById('private-profile').style.display = 'block';
             },
 
             showError: function(message, details = null) {
-                window.LoadingManager.hide(document.getElementById('loading-container'));
+                document.getElementById('loading-container').classList.remove('show');
                 
                 const errorElement = document.getElementById('error-state');
                 const errorTextElement = document.getElementById('error-text');
@@ -1200,6 +1246,9 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             try {
+                // Show loading initially
+                document.getElementById('loading-container').classList.add('show');
+                
                 ProfileManager.init();
             } catch (error) {
                 console.error('Error initializing Profile page:', error);

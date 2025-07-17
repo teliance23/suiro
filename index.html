@@ -10,651 +10,10 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Firebase SDK -->
-    <script type="module">
-        // Import Firebase functions
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        // ⚡ NOUVEAU : Imports Firebase complets pour le système de rankings
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyDHP3A6BZXAx72fY0_BFJQe9y1F2Za_Xo8",
-            authDomain: "suirodoku-web.firebaseapp.com",
-            projectId: "suirodoku-web",
-            storageBucket: "suirodoku-web.firebasestorage.app",
-            messagingSenderId: "936879624195",
-            appId: "1:936879624195:web:e3d2682df7c9b213d87e36",
-            measurementId: "G-RPJXTCGLZN"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        // Make Firebase functions globally available
-        window.firebaseAuth = {
-            auth,
-            db,
-            onAuthStateChanged,
-            signOut,
-            doc,
-            getDoc,
-            setDoc,
-            updateDoc,
-            collection,
-            getDocs,
-            query,
-            orderBy,
-            limit,
-            where
-        };
-
-        // ============= FONCTIONS GLOBALES DE PROFIL =============
-        
-        // Fonction pour obtenir le nom d'affichage selon les préférences
-        window.getDisplayName = function(userData) {
-            if (userData.profile?.displayPreference === 'gamertag' && userData.profile?.gamertag) {
-                return userData.profile.gamertag;
-            }
-            return userData.displayName || 'Anonymous';
-        };
-
-        // Fonction pour obtenir le drapeau selon la nationalité
-        window.getFlagEmoji = function(countryCode) {
-            const flags = {
-                'FR': '🇫🇷', 'US': '🇺🇸', 'GB': '🇬🇧', 'DE': '🇩🇪', 'ES': '🇪🇸',
-                'IT': '🇮🇹', 'JP': '🇯🇵', 'CN': '🇨🇳', 'BR': '🇧🇷', 'CA': '🇨🇦',
-                'AU': '🇦🇺', 'IN': '🇮🇳', 'RU': '🇷🇺', 'MX': '🇲🇽', 'KR': '🇰🇷',
-                'NL': '🇳🇱', 'SE': '🇸🇪', 'NO': '🇳🇴', 'DK': '🇩🇰', 'FI': '🇫🇮',
-                'CH': '🇨🇭', 'AT': '🇦🇹', 'BE': '🇧🇪', 'PL': '🇵🇱', 'PT': '🇵🇹'
-            };
-            return flags[countryCode] || '🌍';
-        };
-
-        // Fonction pour vérifier si le profil est complet
-        window.isProfileComplete = function(userData) {
-            return userData.profile?.isProfileComplete === true;
-        };
-
-        // Fonction pour récupérer les données utilisateur complètes
-        window.getUserData = async function(user) {
-            try {
-                const userRef = doc(db, 'users', user.uid);
-                const userDoc = await getDoc(userRef);
-                
-                if (userDoc.exists()) {
-                    return { ...user, ...userDoc.data() };
-                }
-                return user;
-            } catch (error) {
-                console.error('Error fetching user data:', error);
-                return user;
-            }
-        };
-
-        // ⚡ NOUVEAU : Fonction pour mettre à jour SEULEMENT les statistiques du joueur
-        window.updatePlayerStatsOnly = async function(gameData) {
-            try {
-                const user = auth.currentUser;
-                if (!user) {
-                    throw new Error('User not authenticated');
-                }
-
-                // Appeler directement la fonction de mise à jour des stats
-                await updatePlayerStats(user.uid, gameData);
-                console.log(`Player stats updated for ${gameData.gameMode} game:`, {
-                    difficulty: gameData.difficulty,
-                    time: gameData.time,
-                    score: gameData.finalScore,
-                    completed: gameData.isCompleted
-                });
-                
-            } catch (error) {
-                console.error('Error updating player stats:', error);
-                throw error;
-            }
-        };
-
-        // ⚡ NOUVEAU : Fonction pour récupérer les stats d'un joueur
-        window.getPlayerStats = async function(userId) {
-            try {
-                if (!userId) return null;
-                
-                const userRef = doc(db, 'users', userId);
-                const userDoc = await getDoc(userRef);
-                
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    return userData.gameStats || null;
-                } else {
-                    return null;
-                }
-            } catch (error) {
-                console.error('Error getting player stats:', error);
-                return null;
-            }
-        };
-
-        // ⚡ NOUVEAU : Fonction pour mettre à jour les stats du joueur avec ranking
-        async function updatePlayerStats(userId, gameData) {
-            try {
-                const userRef = doc(db, 'users', userId);
-                const userDoc = await getDoc(userRef);
-                
-                // ⚡ NOUVEAU : Structure de stats complète avec ranking
-                let currentStats = {
-                    totalGamesPlayed: 0,
-                    totalGamesWon: 0,
-                    totalTimeSpent: 0,
-                    averageTime: 0,
-                    averageScore: 0,
-                    bestScores: { easy: 0, medium: 0, hard: 0, expert: 0, master: 0 },
-                    practiceGames: 0,
-                    rankedGames: 0,
-                    level: 'Beginner',
-                    currentPerformance: 0,
-                    lastPlayed: new Date(),
-                    gamesCompleted: 0,
-                    gamesAbandoned: 0,
-                    gamesDefeated: 0,
-                    // ⚡ NOUVEAU : Champs ranking
-                    ranking: {
-                        totalScore: 0,
-                        averageScore: 0,
-                        perfectGames: 0,
-                        rankingPoints: 0,
-                        bestRank: 0,
-                        currentStreak: 0,
-                        bestStreak: 0
-                    }
-                };
-
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    currentStats = { ...currentStats, ...(userData.gameStats || {}) };
-                    // ⚡ NOUVEAU : Assurer que les champs ranking existent
-                    if (!currentStats.ranking) {
-                        currentStats.ranking = {
-                            totalScore: 0,
-                            averageScore: 0,
-                            perfectGames: 0,
-                            rankingPoints: 0,
-                            bestRank: 0,
-                            currentStreak: 0,
-                            bestStreak: 0
-                        };
-                    }
-                }
-
-                // ============= CALCUL DU SCORE AVEC PÉNALITÉ JUSTE =============
-                const calculatedScore = calculateFairScore(gameData);
-
-                // ============= MISE À JOUR DU SCORE MOYEN PONDÉRÉ =============
-                const alpha = 0.3; // Coefficient de pondération
-                const previousAverage = currentStats.averageScore || gameData.initialScore;
-                const newAverageScore = Math.round(
-                    (alpha * calculatedScore) + ((1 - alpha) * previousAverage)
-                );
-
-                // ============= MISE À JOUR DES AUTRES STATISTIQUES =============
-                const isWin = gameData.isCompleted && gameData.performance >= 50;
-                const newTotalGames = currentStats.totalGamesPlayed + 1;
-                const newTotalWins = currentStats.totalGamesWon + (isWin ? 1 : 0);
-                const newTotalTime = currentStats.totalTimeSpent + gameData.time;
-                const newAverageTime = Math.round(newTotalTime / newTotalGames);
-
-                // Mettre à jour le compteur de mode
-                const newPracticeGames = gameData.gameMode === 'practice' ? 
-                    (currentStats.practiceGames || 0) + 1 : (currentStats.practiceGames || 0);
-                const newRankedGames = gameData.gameMode === 'ranked' ? 
-                    (currentStats.rankedGames || 0) + 1 : (currentStats.rankedGames || 0);
-
-                // ⚡ NOUVEAU : Compteurs de résultats
-                let newGamesCompleted = currentStats.gamesCompleted || 0;
-                let newGamesAbandoned = currentStats.gamesAbandoned || 0;
-                let newGamesDefeated = currentStats.gamesDefeated || 0;
-
-                if (gameData.isCompleted) {
-                    newGamesCompleted++;
-                } else if (gameData.isAbandoned) {
-                    newGamesAbandoned++;
-                } else if (gameData.isDefeated) {
-                    newGamesDefeated++;
-                }
-
-                // Mettre à jour le meilleur score pour cette difficulté (seulement si gagné)
-                const currentBest = currentStats.bestScores?.[gameData.difficulty] || 0;
-                const newBestScores = { ...currentStats.bestScores };
-                if (gameData.isCompleted && gameData.finalScore > currentBest) {
-                    newBestScores[gameData.difficulty] = gameData.finalScore;
-                }
-
-                // Calculer le niveau basé sur les parties ranked gagnées
-                const newLevel = calculatePlayerLevel(newRankedGames, newTotalWins, gameData.gameMode === 'ranked' && isWin);
-
-                // Calculer la performance actuelle (basée sur le score moyen vs score initial moyen)
-                let newPerformance = currentStats.currentPerformance || 0;
-                if (gameData.gameMode === 'ranked') {
-                    // Performance basée sur le score moyen par rapport au score initial moyen
-                    const averageInitialScore = getAverageInitialScore();
-                    newPerformance = Math.round(((newAverageScore / averageInitialScore) * 100) * 100) / 100;
-                }
-
-                // ⚡ NOUVEAU : Calcul des stats de ranking
-                const newRanking = calculateRankingStats(currentStats.ranking, gameData, isWin);
-
-                // ============= METTRE À JOUR LA BASE DE DONNÉES =============
-                const updatedStats = {
-                    totalGamesPlayed: newTotalGames,
-                    totalGamesWon: newTotalWins,
-                    totalTimeSpent: newTotalTime,
-                    averageTime: newAverageTime,
-                    averageScore: newAverageScore,
-                    bestScores: newBestScores,
-                    practiceGames: newPracticeGames,
-                    rankedGames: newRankedGames,
-                    level: newLevel,
-                    currentPerformance: Math.max(0, Math.min(100, newPerformance)),
-                    lastPlayed: new Date(),
-                    gamesCompleted: newGamesCompleted,
-                    gamesAbandoned: newGamesAbandoned,
-                    gamesDefeated: newGamesDefeated,
-                    // ⚡ NOUVEAU : Stats de ranking
-                    ranking: newRanking
-                };
-
-                await updateDoc(userRef, {
-                    gameStats: updatedStats
-                }, { merge: true });
-
-                console.log('✅ Player stats updated successfully with ranking:', {
-                    totalGames: newTotalGames,
-                    averageScore: newAverageScore,
-                    calculatedScore: calculatedScore,
-                    finalScore: gameData.finalScore,
-                    level: newLevel,
-                    rankingPoints: newRanking.rankingPoints,
-                    currentStreak: newRanking.currentStreak
-                });
-
-            } catch (error) {
-                console.error('❌ Error updating player stats:', error);
-                throw error;
-            }
-        }
-
-        // ⚡ NOUVEAU : Fonction pour calculer les stats de ranking
-        function calculateRankingStats(currentRanking, gameData, isWin) {
-            const newRanking = { ...currentRanking };
-            
-            // Mise à jour du score total
-            newRanking.totalScore = (newRanking.totalScore || 0) + gameData.finalScore;
-            
-            // Mise à jour du score moyen
-            const totalGames = (newRanking.totalGames || 0) + 1;
-            newRanking.averageScore = Math.round(newRanking.totalScore / totalGames);
-            newRanking.totalGames = totalGames;
-            
-            // Partie parfaite (aucune erreur et terminée)
-            if (gameData.isCompleted && gameData.errors === 0) {
-                newRanking.perfectGames = (newRanking.perfectGames || 0) + 1;
-            }
-            
-            // Calcul des ranking points basé sur la performance
-            const rankingPoints = calculateRankingPoints(gameData, isWin);
-            newRanking.rankingPoints = (newRanking.rankingPoints || 0) + rankingPoints;
-            
-            // Gestion des streaks
-            if (isWin) {
-                newRanking.currentStreak = (newRanking.currentStreak || 0) + 1;
-                newRanking.bestStreak = Math.max(newRanking.bestStreak || 0, newRanking.currentStreak);
-            } else {
-                newRanking.currentStreak = 0;
-            }
-            
-            return newRanking;
-        }
-
-        // ⚡ NOUVEAU : Fonction pour calculer les points de ranking
-        function calculateRankingPoints(gameData, isWin) {
-            if (!isWin) return -10; // Pénalité pour les parties perdues
-            
-            const difficultyMultipliers = {
-                'easy': 1,
-                'medium': 1.5,
-                'hard': 2,
-                'expert': 3,
-                'master': 5
-            };
-            
-            const basePoints = 100;
-            const difficultyBonus = basePoints * (difficultyMultipliers[gameData.difficulty] || 1);
-            const timeBonus = Math.max(0, 50 - Math.floor(gameData.time / 60)); // Bonus temps
-            const errorPenalty = gameData.errors * 10; // Pénalité erreurs
-            
-            return Math.max(10, Math.round(difficultyBonus + timeBonus - errorPenalty));
-        }
-
-        // ============= CALCUL DU SCORE AVEC PÉNALITÉ JUSTE =============
-        function calculateFairScore(gameData) {
-            const { finalScore, initialScore, isCompleted, errors, time, difficulty } = gameData;
-            
-            if (isCompleted) {
-                // Partie terminée avec succès : score réel
-                return finalScore;
-            }
-            
-            // ============= PÉNALITÉS POUR PARTIES NON TERMINÉES =============
-            
-            // 1. Base : score actuel au moment de l'abandon
-            let penalizedScore = finalScore;
-            
-            // 2. Pénalité de base pour abandon (20% du score initial)
-            const abandonPenalty = Math.round(initialScore * 0.20);
-            penalizedScore = Math.max(0, penalizedScore - abandonPenalty);
-            
-            // 3. Pénalité proportionnelle au temps joué
-            // Plus on abandonne tôt, plus la pénalité est forte
-            const expectedMinTime = getDifficultyMinTime(difficulty);
-            const timeRatio = Math.min(time / expectedMinTime, 1);
-            const timePenalty = Math.round(initialScore * 0.15 * (1 - timeRatio));
-            penalizedScore = Math.max(0, penalizedScore - timePenalty);
-            
-            // 4. Score minimum garanti (10% du score initial)
-            const minimumScore = Math.round(initialScore * 0.10);
-            penalizedScore = Math.max(minimumScore, penalizedScore);
-            
-            return penalizedScore;
-        }
-
-        // Temps minimum attendu par difficulté (en secondes)
-        function getDifficultyMinTime(difficulty) {
-            const minTimes = {
-                'easy': 180,    // 3 minutes
-                'medium': 300,  // 5 minutes  
-                'hard': 450,    // 7.5 minutes
-                'expert': 600,  // 10 minutes
-                'master': 900   // 15 minutes
-            };
-            return minTimes[difficulty] || 300;
-        }
-
-        // Score initial moyen pour calculer la performance
-        function getAverageInitialScore() {
-            return (2000 + 4000 + 8000 + 15000 + 25000) / 5; // 10,800
-        }
-
-        // Fonction pour calculer le niveau du joueur
-        function calculatePlayerLevel(rankedGames, totalWins, isRankedWin) {
-            if (rankedGames < 5) return 'Beginner';
-            if (rankedGames < 10) return 'Novice';
-            if (rankedGames < 25) return 'Intermediate';
-            if (rankedGames < 50) return 'Advanced';
-            if (rankedGames < 100) return 'Expert';
-            if (rankedGames < 200) return 'Master';
-            return 'Legend';
-        }
-
-        // ⚡ NOUVEAU : Fonction pour récupérer le classement global
-        window.getLeaderboards = async function(difficulty = null, limit = 50) {
-            try {
-                console.log('🏆 Getting leaderboards...');
-                
-                // Query pour récupérer les utilisateurs avec les meilleurs ranking points
-                let leaderboardQuery = query(
-                    collection(db, 'users'),
-                    orderBy('gameStats.ranking.rankingPoints', 'desc'),
-                    limit(limit)
-                );
-
-                const querySnapshot = await getDocs(leaderboardQuery);
-                const leaderboard = [];
-
-                querySnapshot.forEach((doc) => {
-                    const userData = doc.data();
-                    if (userData.gameStats && userData.gameStats.totalGamesPlayed > 0) {
-                        leaderboard.push({
-                            userId: doc.id,
-                            displayName: userData.displayName || 'Anonymous',
-                            level: userData.gameStats.level || 'Beginner',
-                            rankingPoints: userData.gameStats.ranking?.rankingPoints || 0,
-                            totalGames: userData.gameStats.totalGamesPlayed || 0,
-                            gamesWon: userData.gameStats.totalGamesWon || 0,
-                            currentStreak: userData.gameStats.ranking?.currentStreak || 0,
-                            bestStreak: userData.gameStats.ranking?.bestStreak || 0,
-                            perfectGames: userData.gameStats.ranking?.perfectGames || 0,
-                            averageScore: userData.gameStats.ranking?.averageScore || 0,
-                            bestScores: userData.gameStats.bestScores || {},
-                            nationality: userData.profile?.nationality || ''
-                        });
-                    }
-                });
-
-                console.log(`✅ Retrieved ${leaderboard.length} leaderboard entries`);
-                return leaderboard;
-            } catch (error) {
-                console.error('❌ Error getting leaderboards:', error);
-                return [];
-            }
-        };
-
-        // ⚡ NOUVEAU : Fonction pour obtenir le rang d'un utilisateur
-        window.getUserRank = async function(userId) {
-            try {
-                const userRef = doc(db, 'users', userId);
-                const userDoc = await getDoc(userRef);
-                
-                if (!userDoc.exists()) return null;
-                
-                const userData = userDoc.data();
-                const userPoints = userData.gameStats?.ranking?.rankingPoints || 0;
-                
-                // Compter combien d'utilisateurs ont plus de points
-                const higherQuery = query(
-                    collection(db, 'users'),
-                    where('gameStats.ranking.rankingPoints', '>', userPoints)
-                );
-                
-                const higherSnapshot = await getDocs(higherQuery);
-                const rank = higherSnapshot.size + 1;
-                
-                console.log(`✅ User rank calculated: ${rank}`);
-                return rank;
-            } catch (error) {
-                console.error('❌ Error getting user rank:', error);
-                return null;
-            }
-        };
-
-        console.log('🔥 Firebase initialized with complete ranking system');
-    </script>
-    
     <link rel="stylesheet" href="style.css">
-    
-    <!-- Styles pour le header dynamique -->
-    <style>
-        /* ============= HEADER DYNAMIQUE - STYLES ============= */
-        .user-menu {
-            position: relative;
-            display: inline-block;
-        }
-
-        .user-name {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            color: #4a5568;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .user-name:hover {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: rgba(255, 255, 255, 0.3);
-            color: #2d3748;
-        }
-
-        .user-name::after {
-            content: '▼';
-            font-size: 10px;
-            transition: transform 0.3s ease;
-        }
-
-        .user-menu:hover .user-name::after {
-            transform: rotate(180deg);
-        }
-
-        .dropdown-menu {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background: white;
-            border: 1px solid rgba(229, 229, 234, 0.3);
-            border-radius: 12px;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
-            min-width: 200px;
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-10px);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-        }
-
-        .user-menu:hover .dropdown-menu {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        .dropdown-menu a {
-            display: block;
-            padding: 14px 20px;
-            color: #1c1c1e;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            border-bottom: 1px solid rgba(229, 229, 234, 0.3);
-        }
-
-        .dropdown-menu a:last-child {
-            border-bottom: none;
-        }
-
-        .dropdown-menu a:hover {
-            background: rgba(0, 122, 255, 0.05);
-            color: #007aff;
-        }
-
-        .dropdown-menu a:first-child {
-            border-top-left-radius: 12px;
-            border-top-right-radius: 12px;
-        }
-
-        .dropdown-menu a:last-child {
-            border-bottom-left-radius: 12px;
-            border-bottom-right-radius: 12px;
-        }
-
-        .user-flag {
-            font-size: 16px;
-            margin-right: 4px;
-        }
-        
-        /* ============= STYLES POUR NOUVEAUX TOASTS ============= */
-        .stats-toast {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #007aff;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            z-index: 10000;
-            font-weight: 600;
-            box-shadow: 0 4px 12px rgba(0,122,255,0.3);
-            animation: slideIn 0.3s ease-out;
-        }
-        
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-        
-        @keyframes slideOut {
-            from {
-                transform: translateX(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-        }
-    </style>
 </head>
 <body>
     <div class="main-content">
-        <!-- Menu Mobile Overlay -->
-        <div class="mobile-overlay" id="mobile-overlay"></div>
-
-        <!-- Menu Mobile -->
-        <div class="mobile-menu" id="mobile-menu">
-            <div class="mobile-menu-header">
-                <div class="mobile-logo">Suirodoku.com</div>
-                <button class="mobile-close" id="mobile-close">×</button>
-            </div>
-            
-            <div class="mobile-menu-content">
-                <div class="mobile-nav-section">
-                    <div class="mobile-section-title">Navigation</div>
-                    <button class="mobile-nav-item" onclick="navigateTo('tutorial'); closeMobileMenu();">
-                        How to Play
-                    </button>
-                    <button class="mobile-nav-item" onclick="navigateTo('leaderboard'); closeMobileMenu();">
-                        Leaderboards
-                    </button>
-                </div>
-                
-                <div class="mobile-nav-section">
-                    <div class="mobile-section-title">Game</div>
-                    <button class="mobile-nav-item" onclick="ModalManager.showNewGameModal(); closeMobileMenu();">
-                        New Game
-                    </button>
-                </div>
-                
-                <!-- Section Account - Dynamique selon l'état de connexion -->
-                <div class="mobile-nav-section" id="mobile-auth-section">
-                    <div class="mobile-section-title">Account</div>
-                    <!-- Contenu dynamique injecté par JavaScript -->
-                </div>
-                
-                <div class="mobile-nav-section">
-                    <div class="mobile-section-title">Legal</div>
-                    <button class="mobile-nav-item" onclick="navigateTo('legal'); closeMobileMenu();">
-                        Privacy & Terms
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <!-- Error Modal -->
         <div class="error-modal" id="error-modal">
             <div class="error-icon">🔄</div>
@@ -662,7 +21,7 @@
             <div class="error-subtext">Click "Correct" to clear the error and continue</div>
         </div>
 
-        <!-- Header -->
+        <!-- Header - CSS injecté automatiquement par auth-header.js -->
         <div class="header">
             <div class="logo" onclick="goToHome()">Suirodoku.com</div>
             
@@ -679,7 +38,7 @@
             
             <!-- Auth Buttons (Desktop) - Dynamique selon l'état de connexion -->
             <div class="auth-buttons" id="desktop-auth-buttons">
-                <!-- Contenu dynamique injecté par JavaScript -->
+                <!-- Contenu dynamique injecté par auth-header.js -->
             </div>
         </div>
 
@@ -712,12 +71,6 @@
 
                 <!-- Boutons d'action (Desktop: à droite, Mobile: à gauche) -->
                 <div class="pause-container">
-                    <!-- Bouton Hamburger Mobile - visible seulement sur mobile -->
-                    <div class="mobile-hamburger" id="mobile-hamburger">
-                        <div class="hamburger-line"></div>
-                        <div class="hamburger-line"></div>
-                        <div class="hamburger-line"></div>
-                    </div>
                     <!-- Boutons dans l'ordre logique -->
                     <button class="solve-btn" id="correct-btn" title="Correct the error" style="display: none;">Correct</button>
                     <button class="solve-btn" id="reveal-btn" title="Complete the entire grid">Complete</button>
@@ -932,144 +285,61 @@
         </div>
     </footer>
 
+    <!-- Scripts optimisés - Plus de duplication ! -->
+    <script src="firebase-config.js"></script>
+    <script src="auth-utils.js"></script>
+    <script src="auth-header.js"></script>
+    <script src="menu.js"></script>
     <script src="script.js"></script>
     
-    <!-- Script pour gestion dynamique du header -->
+    <!-- Code spécifique à la page principale uniquement -->
     <script>
-        // ============= GESTION DYNAMIQUE DU HEADER =============
-        
-        async function updateHeaderAuthState(user) {
-            const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
-            const mobileAuthSection = document.getElementById('mobile-auth-section');
-            
-            if (user && desktopAuthButtons) {
-                // Récupérer les données utilisateur complètes
-                const userData = await getUserData(user);
-                
-                // Utilisateur connecté - Afficher menu utilisateur
-                const displayName = getDisplayName(userData);
-                const flag = userData.profile?.nationality ? getFlagEmoji(userData.profile.nationality) : '';
-                
-                desktopAuthButtons.innerHTML = `
-                    <div class="user-menu">
-                        <div class="user-name">
-                            <span class="user-flag">${flag}</span>
-                            <span>${displayName}</span>
-                        </div>
-                        <div class="dropdown-menu">
-                            <a href="./profile/">👤 My Profile</a>
-                            <a href="./stats/">📊 My Statistics</a>
-                            <a href="./settings/">⚙️ Settings</a>
-                            <a href="#" onclick="signOutUser()">🚪 Sign Out</a>
-                        </div>
-                    </div>
-                `;
-                
-                // Menu mobile
-                if (mobileAuthSection) {
-                    mobileAuthSection.innerHTML = `
-                        <div class="mobile-section-title">Account</div>
-                        <button class="mobile-nav-item" onclick="navigateTo('profile'); closeMobileMenu();">
-                            <span style="margin-right: 12px;">👤</span>
-                            My Profile
-                        </button>
-                        <button class="mobile-nav-item" onclick="navigateTo('stats'); closeMobileMenu();">
-                            <span style="margin-right: 12px;">📊</span>
-                            My Statistics
-                        </button>
-                        <button class="mobile-nav-item" onclick="navigateTo('settings'); closeMobileMenu();">
-                            <span style="margin-right: 12px;">⚙️</span>
-                            Settings
-                        </button>
-                        <button class="mobile-nav-item" onclick="signOutUser(); closeMobileMenu();">
-                            <span style="margin-right: 12px;">🚪</span>
-                            Sign Out
-                        </button>
-                    `;
-                }
-            } else if (desktopAuthButtons) {
-                // Utilisateur non connecté - Afficher bouton Login
-                desktopAuthButtons.innerHTML = `
-                    <button class="auth-btn login-btn" onclick="navigateTo('auth')">Log In</button>
-                `;
-                
-                if (mobileAuthSection) {
-                    mobileAuthSection.innerHTML = `
-                        <div class="mobile-section-title">Account</div>
-                        <button class="mobile-nav-item" onclick="navigateTo('auth'); closeMobileMenu();">
-                            Log In
-                        </button>
-                    `;
-                }
-            }
-        }
-        
-        // Fonction de déconnexion
-        window.signOutUser = async function() {
-            try {
-                const { auth, signOut } = window.firebaseAuth;
-                await signOut(auth);
-                console.log('✅ User signed out successfully');
-                
-                // Mettre à jour l'interface immédiatement
-                updateHeaderAuthState(null);
-                
-            } catch (error) {
-                console.error('❌ Error signing out:', error);
-                alert('Error signing out. Please try again.');
-            }
-        };
-        
-        // Écouter les changements d'état d'authentification
-        function initializeHeaderAuth() {
-            // Vérifier si Firebase est disponible
-            if (typeof window.firebaseAuth !== 'undefined') {
-                const { auth, onAuthStateChanged } = window.firebaseAuth;
-                
-                onAuthStateChanged(auth, (user) => {
-                    updateHeaderAuthState(user);
-                });
-            } else {
-                // Firebase pas encore chargé, réessayer
-                setTimeout(initializeHeaderAuth, 100);
-            }
-        }
-        
-        // Initialiser au chargement de la page
+        // Initialisation au chargement de la page
         document.addEventListener('DOMContentLoaded', function() {
-            // Afficher l'état par défaut (non connecté)
-            updateHeaderAuthState(null);
+            // Afficher l'état par défaut (non connecté) en attendant Firebase
+            if (typeof window.AuthHeader !== 'undefined') {
+                window.AuthHeader.init();
+            }
             
-            // Puis initialiser l'écoute Firebase
-            initializeHeaderAuth();
+            // Initialiser Firebase Auth quand disponible
+            function initAuth() {
+                if (typeof window.firebaseAuth !== 'undefined') {
+                    const { auth, onAuthStateChanged } = window.firebaseAuth;
+                    
+                    onAuthStateChanged(auth, (user) => {
+                        if (typeof window.AuthHeader !== 'undefined') {
+                            window.AuthHeader.updateAuthState(user);
+                        }
+                        if (typeof window.MobileMenu !== 'undefined') {
+                            window.MobileMenu.syncWithAuthHeader(user);
+                        }
+                    });
+                } else {
+                    // Firebase pas encore chargé, réessayer
+                    setTimeout(initAuth, 100);
+                }
+            }
+            
+            initAuth();
         });
         
-        // Fonction navigateTo pour toutes les pages
+        // Fonctions de navigation globales (utilisées par le HTML existant)
         function navigateTo(page) {
-            switch(page) {
-                case 'profile':
-                    window.location.href = './profile/';
-                    break;
-                case 'stats':
-                    window.location.href = './stats/';
-                    break;
-                case 'settings':
-                    window.location.href = './settings/';
-                    break;
-                case 'auth':
-                    window.location.href = './auth/';
-                    break;
-                case 'tutorial':
-                    window.location.href = './tutorial/';
-                    break;
-                case 'leaderboard':
-                    window.location.href = './leaderboard/';
-                    break;
-                case 'legal':
-                    window.location.href = './legal/';
-                    break;
-                default:
-                    console.log('Navigate to:', page);
+            const routes = {
+                'home': './',
+                'auth': './auth/',
+                'profile': './profile/',
+                'stats': './stats/',
+                'settings': './settings/',
+                'tutorial': './tutorial/',
+                'leaderboard': './leaderboard/',
+                'legal': './legal/'
+            };
+            
+            if (routes[page]) {
+                window.location.href = routes[page];
+            } else {
+                console.warn(`Route inconnue: ${page}`);
             }
         }
         

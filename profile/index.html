@@ -11,13 +11,12 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- Firebase SDK -->
+    <!-- Firebase SDK - CORRIGÉ avec tous les imports nécessaires -->
     <script type="module">
-        // Import Firebase functions
+        // Import Firebase functions - IMPORTS COMPLETS
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        // ⚡ NOUVEAU : Imports Firebase complets pour le système de rankings
-        import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getAuth, onAuthStateChanged, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // Firebase configuration
         const firebaseConfig = {
@@ -35,20 +34,23 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Make Firebase functions globally available
+        // Make Firebase functions globally available - COMPLET
         window.firebaseAuth = {
             auth,
             db,
             onAuthStateChanged,
             signOut,
+            updateProfile,
             doc,
             getDoc,
+            setDoc,
+            updateDoc,
             collection,
-            getDocs,
             query,
+            where,
             orderBy,
             limit,
-            where
+            getDocs
         };
 
         // ============= FONCTIONS GLOBALES DE PROFIL =============
@@ -73,7 +75,7 @@
             return flags[countryCode] || '🌍';
         };
 
-        // Fonction pour récupérer les données utilisateur complètes
+        // Fonction pour récupérer les données utilisateur complètes - CORRIGÉE
         window.getUserData = async function(user) {
             try {
                 const userRef = doc(db, 'users', user.uid);
@@ -82,98 +84,90 @@
                 if (userDoc.exists()) {
                     return { ...user, ...userDoc.data() };
                 }
-                return user;
+                
+                // Créer un profil par défaut si aucune donnée
+                const defaultProfile = {
+                    displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+                    email: user.email,
+                    profile: {
+                        isProfileComplete: false,
+                        displayPreference: 'realname',
+                        joinDate: new Date(),
+                        gamertag: '',
+                        nationality: '',
+                        bio: ''
+                    },
+                    preferences: {
+                        defaultDifficulty: 'easy',
+                        defaultMode: 'practice'
+                    },
+                    privacy: {
+                        profileVisibility: 'public',
+                        showInLeaderboards: true
+                    },
+                    improvedStats: {
+                        totalGames: 0,
+                        totalPlayTime: 0,
+                        practice: {
+                            gamesPlayed: 0,
+                            gamesCompleted: 0,
+                            totalScore: 0,
+                            bestScores: {
+                                easy: 0,
+                                medium: 0,
+                                hard: 0,
+                                expert: 0,
+                                master: 0
+                            }
+                        },
+                        ranked: {
+                            gamesPlayed: 0,
+                            gamesCompleted: 0,
+                            currentRating: 1000,
+                            peakRating: 1000,
+                            winStreak: 0
+                        }
+                    }
+                };
+                
+                // Sauvegarder le profil par défaut
+                await setDoc(userRef, defaultProfile);
+                return { ...user, ...defaultProfile };
+                
             } catch (error) {
                 console.error('Error fetching user data:', error);
-                return user;
+                throw new Error('Failed to load user data');
             }
         };
 
-        // ⚡ NOUVEAU : Système de niveaux basé sur ranking points
-        window.getPlayerLevel = function(rankingPoints) {
+        // ============= SYSTÈME DE NIVEAUX =============
+        window.getPlayerLevel = function(rating) {
             const levels = [
-                { name: 'Novice', minPoints: 0, color: '#8e8e93', icon: '🥉' },
-                { name: 'Beginner', minPoints: 500, color: '#34c759', icon: '🟢' },
-                { name: 'Intermediate', minPoints: 1500, color: '#007aff', icon: '🔵' },
-                { name: 'Advanced', minPoints: 3500, color: '#af52de', icon: '🟣' },
-                { name: 'Expert', minPoints: 7000, color: '#ff9500', icon: '🟠' },
-                { name: 'Master', minPoints: 15000, color: '#ff3b30', icon: '🔴' },
-                { name: 'Grandmaster', minPoints: 30000, color: '#ffd700', icon: '👑' }
+                { name: 'Novice', minRating: 100, color: '#8e8e93' },
+                { name: 'Beginner', minRating: 600, color: '#34c759' },
+                { name: 'Intermediate', minRating: 1000, color: '#007aff' },
+                { name: 'Advanced', minRating: 1400, color: '#af52de' },
+                { name: 'Expert', minRating: 1800, color: '#ff9500' },
+                { name: 'Master', minRating: 2200, color: '#ff3b30' },
+                { name: 'Grandmaster', minRating: 2600, color: '#ffd700' }
             ];
             
             for (let i = levels.length - 1; i >= 0; i--) {
-                if (rankingPoints >= levels[i].minPoints) {
+                if (rating >= levels[i].minRating) {
                     return levels[i];
                 }
             }
             return levels[0];
         };
 
-        // ⚡ NOUVEAU : Obtenir le prochain niveau
-        window.getNextLevel = function(rankingPoints) {
-            const levels = [
-                { name: 'Novice', minPoints: 0, color: '#8e8e93', icon: '🥉' },
-                { name: 'Beginner', minPoints: 500, color: '#34c759', icon: '🟢' },
-                { name: 'Intermediate', minPoints: 1500, color: '#007aff', icon: '🔵' },
-                { name: 'Advanced', minPoints: 3500, color: '#af52de', icon: '🟣' },
-                { name: 'Expert', minPoints: 7000, color: '#ff9500', icon: '🟠' },
-                { name: 'Master', minPoints: 15000, color: '#ff3b30', icon: '🔴' },
-                { name: 'Grandmaster', minPoints: 30000, color: '#ffd700', icon: '👑' }
-            ];
-            
-            const currentLevel = window.getPlayerLevel(rankingPoints);
-            const currentIndex = levels.findIndex(level => level.name === currentLevel.name);
-            
-            if (currentIndex < levels.length - 1) {
-                return levels[currentIndex + 1];
+        console.log('🔥 Firebase initialized on profile page with improved stats');
+        
+        // Optimisation de performance
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                getUserData(user).catch(console.error);
             }
-            return null; // Already at max level
-        };
-
-        // ⚡ NOUVEAU : Calculer la progression vers le prochain niveau
-        window.getLevelProgress = function(rankingPoints) {
-            const currentLevel = window.getPlayerLevel(rankingPoints);
-            const nextLevel = window.getNextLevel(rankingPoints);
-            
-            if (!nextLevel) return 100; // Already at max level
-            
-            const currentPoints = rankingPoints || 0;
-            const levelStart = currentLevel.minPoints;
-            const levelEnd = nextLevel.minPoints;
-            
-            const progress = ((currentPoints - levelStart) / (levelEnd - levelStart)) * 100;
-            return Math.max(0, Math.min(100, progress));
-        };
-
-        // ⚡ NOUVEAU : Obtenir le rang global de l'utilisateur
-        window.getUserGlobalRank = async function(userId) {
-            try {
-                const userRef = doc(db, 'users', userId);
-                const userDoc = await getDoc(userRef);
-                
-                if (!userDoc.exists()) return null;
-                
-                const userData = userDoc.data();
-                const userPoints = userData.gameStats?.ranking?.rankingPoints || 0;
-                
-                // Compter combien d'utilisateurs ont plus de points
-                const higherQuery = query(
-                    collection(db, 'users'),
-                    where('gameStats.ranking.rankingPoints', '>', userPoints)
-                );
-                
-                const higherSnapshot = await getDocs(higherQuery);
-                const rank = higherSnapshot.size + 1;
-                
-                console.log(`✅ User global rank calculated: ${rank}`);
-                return rank;
-            } catch (error) {
-                console.error('❌ Error getting user global rank:', error);
-                return null;
-            }
-        };
-
-        console.log('🔥 Firebase initialized on profile page with complete ranking system');
+        });
     </script>
     
     <style>
@@ -293,7 +287,7 @@
             margin-right: 4px;
         }
 
-        /* ============= HEADER (identique au code original) ============= */
+        /* ============= HEADER ============= */
         .header {
             display: flex;
             justify-content: flex-end;
@@ -371,10 +365,16 @@
             align-items: center;
         }
 
-        .signup-btn:hover {
-            background: linear-gradient(135deg, #5a67d8 0%, #6b46a3 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        .login-btn {
+            background: transparent;
+            border: 2px solid #e2e8f0;
+            color: #4a5568;
+        }
+
+        .login-btn:hover {
+            background-color: #f7fafc;
+            border-color: #cbd5e0;
+            color: #2d3748;
         }
 
         /* ============= MOBILE HAMBURGER ============= */
@@ -592,98 +592,28 @@
             margin-bottom: 24px;
         }
 
-        /* ⚡ NOUVEAU : Badge de niveau amélioré */
         .profile-level {
-            display: inline-block;
-            padding: 12px 24px;
-            border-radius: 20px;
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 16px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-        }
-
-        /* ⚡ NOUVEAU : Badge de ranking points */
-        .profile-ranking {
-            display: inline-block;
-            background: linear-gradient(135deg, #007aff, #0056b3);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 20px;
-            font-size: 16px;
-            font-weight: 700;
-            margin: 0 8px 16px 8px;
-            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-        }
-
-        /* ⚡ NOUVEAU : Badge de rang global */
-        .profile-rank {
             display: inline-block;
             background: linear-gradient(135deg, #ffd700, #ff8c00);
             color: #1c1c1e;
-            padding: 12px 24px;
+            padding: 8px 20px;
             border-radius: 20px;
-            font-size: 16px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .profile-rating {
+            display: inline-block;
+            background: linear-gradient(135deg, #007aff, #0056b3);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
             font-weight: 700;
             margin: 0 8px 24px 8px;
-            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-        }
-
-        /* ⚡ NOUVEAU : Barre de progression niveau */
-        .level-progress-container {
-            background: rgba(255, 255, 255, 0.7);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
-            border: 1px solid rgba(0, 122, 255, 0.2);
-        }
-
-        .level-progress-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .level-progress-text {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1c1c1e;
-        }
-
-        .level-progress-bar {
-            background: #e5e5ea;
-            border-radius: 10px;
-            height: 20px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .level-progress-fill {
-            height: 100%;
-            border-radius: 10px;
-            transition: width 0.5s ease;
-            background: linear-gradient(90deg, #007aff, #0056b3);
-            position: relative;
-        }
-
-        .level-progress-fill::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-            animation: progressShine 2s infinite;
-        }
-
-        @keyframes progressShine {
-            0% { left: -100%; }
-            100% { left: 100%; }
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
         }
 
         .logout-btn {
@@ -781,29 +711,6 @@
             color: #ffc107;
         }
 
-        .stat-value.danger {
-            color: #dc3545;
-        }
-
-        /* ⚡ NOUVEAU : Stats spéciales pour ranking */
-        .stat-value.ranking-points {
-            background: linear-gradient(135deg, #007aff, #0056b3);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-weight: 800;
-        }
-
-        .stat-value.streak {
-            color: #ff6b35;
-            font-weight: 800;
-        }
-
-        .stat-value.perfect {
-            color: #ffd700;
-            font-weight: 800;
-        }
-
         /* ============= BEST SCORES ============= */
         .best-scores-grid {
             display: grid;
@@ -845,49 +752,6 @@
             margin-bottom: 4px;
         }
 
-        /* ⚡ NOUVEAU : Section Achievements */
-        .achievements-section {
-            background: rgba(255, 255, 255, 0.98);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(229, 229, 234, 0.3);
-            border-radius: 20px;
-            padding: 32px;
-            margin-bottom: 32px;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.08);
-        }
-
-        .achievements-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 16px;
-        }
-
-        .achievement-item {
-            background: linear-gradient(135deg, #ffd700, #ff8c00);
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            color: #1c1c1e;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
-        }
-
-        .achievement-icon {
-            font-size: 32px;
-            margin-bottom: 12px;
-        }
-
-        .achievement-title {
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .achievement-description {
-            font-size: 12px;
-            opacity: 0.8;
-        }
-
         /* ============= LOADING STATE ============= */
         .loading-container {
             display: flex;
@@ -918,7 +782,7 @@
             font-weight: 500;
         }
 
-        /* ============= FOOTER (identique au code original) ============= */
+        /* ============= FOOTER ============= */
         .footer {
             position: fixed;
             bottom: 0;
@@ -1034,14 +898,6 @@
             .best-scores-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
-
-            .achievements-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .level-progress-container {
-                padding: 16px;
-            }
         }
 
         @media (max-width: 480px) {
@@ -1064,18 +920,9 @@
             .score-item {
                 padding: 16px;
             }
-
-            .profile-level,
-            .profile-ranking,
-            .profile-rank {
-                display: block;
-                margin: 8px 0;
-                font-size: 14px;
-                padding: 10px 20px;
-            }
         }
 
-        /* ⚡ NOUVEAU : Mode badges */
+        /* ============= MODE BADGES ============= */
         .mode-badges {
             display: flex;
             gap: 12px;
@@ -1195,21 +1042,8 @@
                         <div class="mode-badge ranked" id="ranked-badge">🏆 Ranked Player</div>
                     </div>
                     
-                    <!-- ⚡ NOUVEAU : Badges de niveau, ranking et rang -->
                     <div class="profile-level" id="profile-level">🎮 Loading...</div>
-                    <div class="profile-ranking" id="profile-ranking">⭐ 0 Points</div>
-                    <div class="profile-rank" id="profile-rank">🏆 Rank: #-</div>
-                    
-                    <!-- ⚡ NOUVEAU : Barre de progression niveau -->
-                    <div class="level-progress-container" id="level-progress-container">
-                        <div class="level-progress-header">
-                            <span class="level-progress-text" id="progress-text">Progress to next level</span>
-                            <span class="level-progress-text" id="progress-points">0 / 500 points</span>
-                        </div>
-                        <div class="level-progress-bar">
-                            <div class="level-progress-fill" id="progress-fill" style="width: 0%"></div>
-                        </div>
-                    </div>
+                    <div class="profile-rating" id="profile-rating">⭐ Rating: 1000</div>
                     
                     <button class="logout-btn" onclick="handleLogout()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
@@ -1219,51 +1053,8 @@
                     </button>
                 </div>
 
-                <!-- ⚡ NOUVEAU : Section Achievements -->
-                <div class="achievements-section" id="achievements-section" style="display: none;">
-                    <div class="stats-card-title">
-                        <span class="stats-card-icon">🏆</span>
-                        Recent Achievements
-                    </div>
-                    <div class="achievements-grid" id="achievements-grid">
-                        <!-- Achievements ajoutés dynamiquement -->
-                    </div>
-                </div>
-
                 <!-- Stats Grid -->
                 <div class="stats-grid">
-                    <!-- ⚡ NOUVEAU : Ranking Statistics -->
-                    <div class="stats-card">
-                        <div class="stats-card-title">
-                            <span class="stats-card-icon">🏆</span>
-                            Ranking Statistics
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Ranking Points</span>
-                            <span class="stat-value ranking-points" id="ranking-points">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Global Rank</span>
-                            <span class="stat-value highlight" id="global-rank">#-</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Current Level</span>
-                            <span class="stat-value warning" id="current-level">Novice</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Current Streak</span>
-                            <span class="stat-value streak" id="current-streak">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Best Streak</span>
-                            <span class="stat-value streak" id="best-streak">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Perfect Games</span>
-                            <span class="stat-value perfect" id="perfect-games">0</span>
-                        </div>
-                    </div>
-
                     <!-- Practice Stats -->
                     <div class="stats-card">
                         <div class="stats-card-title">
@@ -1287,15 +1078,15 @@
                             <span class="stat-value" id="practice-average-score">0</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-label">Total Time</span>
-                            <span class="stat-value" id="practice-total-time">0h 0m</span>
+                            <span class="stat-label">Total Practice Score</span>
+                            <span class="stat-value" id="practice-total-score">0</span>
                         </div>
                     </div>
 
                     <!-- Ranked Stats -->
                     <div class="stats-card">
                         <div class="stats-card-title">
-                            <span class="stats-card-icon">⚔️</span>
+                            <span class="stats-card-icon">🏆</span>
                             Ranked Statistics
                         </div>
                         <div class="stat-item">
@@ -1311,16 +1102,16 @@
                             <span class="stat-value highlight" id="ranked-win-rate">0%</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-label">Average Score</span>
-                            <span class="stat-value" id="ranked-average-score">0</span>
+                            <span class="stat-label">Current Rating</span>
+                            <span class="stat-value warning" id="ranked-current-rating">1000</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-label">Games Abandoned</span>
-                            <span class="stat-value danger" id="ranked-abandoned">0</span>
+                            <span class="stat-label">Peak Rating</span>
+                            <span class="stat-value highlight" id="ranked-peak-rating">1000</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-label">Games Defeated</span>
-                            <span class="stat-value danger" id="ranked-defeated">0</span>
+                            <span class="stat-label">Win Streak</span>
+                            <span class="stat-value" id="ranked-win-streak">0</span>
                         </div>
                     </div>
 
@@ -1339,12 +1130,8 @@
                             <span class="stat-value" id="total-time">0h 0m</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-label">Average Time</span>
-                            <span class="stat-value" id="average-time">0h 0m</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Overall Average Score</span>
-                            <span class="stat-value highlight" id="overall-average-score">0</span>
+                            <span class="stat-label">Player Level</span>
+                            <span class="stat-value warning" id="player-level-display">Novice</span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-label">Member Since</span>
@@ -1360,7 +1147,7 @@
                     <div class="stats-card" style="grid-column: 1 / -1;">
                         <div class="stats-card-title">
                             <span class="stats-card-icon">🎖️</span>
-                            Best Scores by Difficulty
+                            Best Practice Scores by Difficulty
                         </div>
                         <div class="best-scores-grid">
                             <div class="score-item">
@@ -1416,7 +1203,6 @@
         // ============= GLOBAL VARIABLES =============
         let currentUser = null;
         let userStats = null;
-        let globalRank = null;
 
         // ============= FIREBASE FUNCTIONS =============
         function initializeProfileAuth() {
@@ -1440,68 +1226,71 @@
             });
         }
 
-        // ============= GESTION DYNAMIQUE DU HEADER =============
+        // ============= GESTION DYNAMIQUE DU HEADER - CORRIGÉ =============
         async function updateHeaderAuthState(user) {
             const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
             const mobileAuthSection = document.getElementById('mobile-auth-section');
             
-            if (user && desktopAuthButtons) {
-                const userData = await getUserData(user);
-                const displayName = getDisplayName(userData);
-                const flag = userData.profile?.nationality ? getFlagEmoji(userData.profile.nationality) : '';
-                
-                desktopAuthButtons.innerHTML = `
-                    <div class="user-menu">
-                        <div class="user-name">
-                            <span class="user-flag">${flag}</span>
-                            <span>${displayName}</span>
-                        </div>
-                        <div class="dropdown-menu">
-                            <a href="../profile/">👤 My Profile</a>
-                            <a href="../stats/">📊 My Statistics</a>
-                            <a href="../settings/">⚙️ Settings</a>
-                            <a href="#" onclick="signOutUser()">🚪 Sign Out</a>
-                        </div>
-                    </div>
-                `;
-                
-                if (mobileAuthSection) {
-                    mobileAuthSection.innerHTML = `
-                        <div class="mobile-section-title">Account</div>
-                        <button class="mobile-nav-item" onclick="navigateTo('profile'); closeMobileMenu();">
-                            <span style="margin-right: 12px;">👤</span>
-                            My Profile
-                        </button>
-                        <button class="mobile-nav-item" onclick="navigateTo('stats'); closeMobileMenu();">
-                            <span style="margin-right: 12px;">📊</span>
-                            My Statistics
-                        </button>
-                        <button class="mobile-nav-item" onclick="navigateTo('settings'); closeMobileMenu();">
-                            <span style="margin-right: 12px;">⚙️</span>
-                            Settings
-                        </button>
-                        <button class="mobile-nav-item logout" onclick="handleLogout(); closeMobileMenu();">
-                            <span style="margin-right: 12px;">🚪</span>
-                            Sign Out
-                        </button>
-                    `;
+            if (user) {
+                try {
+                    const userData = await getUserData(user);
+                    const displayName = getDisplayName(userData);
+                    const flag = userData.profile?.nationality ? getFlagEmoji(userData.profile.nationality) : '';
+                    
+                    if (desktopAuthButtons) {
+                        desktopAuthButtons.innerHTML = `
+                            <div class="user-menu">
+                                <div class="user-name">
+                                    <span class="user-flag">${flag}</span>
+                                    <span>${displayName}</span>
+                                </div>
+                                <div class="dropdown-menu">
+                                    <a href="../profile/">👤 My Profile</a>
+                                    <a href="../stats/">📊 My Statistics</a>
+                                    <a href="../settings/">⚙️ Settings</a>
+                                    <a href="#" onclick="signOutUser()">🚪 Sign Out</a>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    if (mobileAuthSection) {
+                        mobileAuthSection.innerHTML = `
+                            <div class="mobile-section-title">Account</div>
+                            <button class="mobile-nav-item" onclick="navigateTo('profile'); closeMobileMenu();">
+                                👤 My Profile
+                            </button>
+                            <button class="mobile-nav-item" onclick="navigateTo('stats'); closeMobileMenu();">
+                                📊 My Statistics
+                            </button>
+                            <button class="mobile-nav-item" onclick="navigateTo('settings'); closeMobileMenu();">
+                                ⚙️ Settings
+                            </button>
+                            <button class="mobile-nav-item logout" onclick="handleLogout(); closeMobileMenu();">
+                                🚪 Sign Out
+                            </button>
+                        `;
+                    }
+                } catch (error) {
+                    console.error('Error updating header:', error);
+                    if (desktopAuthButtons) {
+                        desktopAuthButtons.innerHTML = `<button class="auth-btn login-btn" onclick="signOutUser()">Sign Out</button>`;
+                    }
                 }
-            } else if (desktopAuthButtons) {
-                desktopAuthButtons.innerHTML = `
-                    <button class="auth-btn login-btn" onclick="navigateTo('auth')">Log In</button>
-                `;
-                
+            } else {
+                if (desktopAuthButtons) {
+                    desktopAuthButtons.innerHTML = `<button class="auth-btn login-btn" onclick="navigateTo('auth')">Log In</button>`;
+                }
                 if (mobileAuthSection) {
                     mobileAuthSection.innerHTML = `
                         <div class="mobile-section-title">Account</div>
-                        <button class="mobile-nav-item" onclick="navigateTo('auth'); closeMobileMenu();">
-                            Log In
-                        </button>
+                        <button class="mobile-nav-item" onclick="navigateTo('auth'); closeMobileMenu();">Log In</button>
                     `;
                 }
             }
         }
 
+        // Fonction de déconnexion - RENFORCÉE
         window.signOutUser = async function() {
             const confirmed = confirm('Are you sure you want to sign out?');
             if (!confirmed) return;
@@ -1517,24 +1306,12 @@
             }
         };
 
+        // ============= LOAD USER PROFILE - AMÉLIORÉ =============
         async function loadUserProfile(user) {
             try {
-                const { db, doc, getDoc } = window.firebaseAuth;
-                const userRef = doc(db, 'users', user.uid);
-                const userDoc = await getDoc(userRef);
-
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    userStats = userData.gameStats || getDefaultStats();
-                    
-                    // ⚡ NOUVEAU : Récupérer le rang global
-                    globalRank = await getUserGlobalRank(user.uid);
-                    
-                    updateProfileUI(user, userStats, userData);
-                } else {
-                    userStats = getDefaultStats();
-                    updateProfileUI(user, userStats, {});
-                }
+                const userData = await getUserData(user);
+                userStats = userData.improvedStats || getDefaultStats();
+                updateProfileUI(userData, userStats);
 
                 document.getElementById('loading-container').style.display = 'none';
                 document.getElementById('profile-content').style.display = 'block';
@@ -1547,129 +1324,91 @@
 
         function getDefaultStats() {
             return {
-                // Champs existants
-                totalGamesPlayed: 0,
-                totalGamesWon: 0,
-                totalTimeSpent: 0,
-                averageTime: 0,
-                averageScore: 0,
-                bestScores: { easy: 0, medium: 0, hard: 0, expert: 0, master: 0 },
-                practiceGames: 0,
-                rankedGames: 0,
-                level: 'Beginner',
-                currentPerformance: 0,
-                lastPlayed: new Date(),
-                gamesCompleted: 0,
-                gamesAbandoned: 0,
-                gamesDefeated: 0,
-                // ⚡ NOUVEAU : Champs ranking
-                ranking: {
+                totalGames: 0,
+                totalPlayTime: 0,
+                practice: {
+                    gamesPlayed: 0,
+                    gamesCompleted: 0,
                     totalScore: 0,
-                    averageScore: 0,
-                    perfectGames: 0,
-                    rankingPoints: 0,
-                    bestRank: 0,
-                    currentStreak: 0,
-                    bestStreak: 0
+                    bestScores: {
+                        easy: 0,
+                        medium: 0,
+                        hard: 0,
+                        expert: 0,
+                        master: 0
+                    }
+                },
+                ranked: {
+                    gamesPlayed: 0,
+                    gamesCompleted: 0,
+                    currentRating: 1000,
+                    peakRating: 1000,
+                    winStreak: 0
                 }
             };
         }
 
-        function updateProfileUI(user, stats, userData) {
+        // ============= UPDATE PROFILE UI - CORRIGÉ =============
+        function updateProfileUI(userData, stats) {
             // Profile Header
-            const displayName = getDisplayName(userData) || user.displayName || 'Anonymous Player';
-            const email = user.email || 'No email';
+            const displayName = getDisplayName(userData) || 'Anonymous Player';
+            const email = userData.email || 'No email';
             const avatarInitial = displayName.charAt(0).toUpperCase();
 
             document.getElementById('profile-avatar').textContent = avatarInitial;
             document.getElementById('profile-name').textContent = displayName;
             document.getElementById('profile-email').textContent = email;
 
-            // ⚡ NOUVEAU : Système de niveau basé sur ranking points
-            const rankingPoints = stats.ranking?.rankingPoints || 0;
-            const currentLevel = getPlayerLevel(rankingPoints);
-            const nextLevel = getNextLevel(rankingPoints);
-            const progress = getLevelProgress(rankingPoints);
-
-            // Badges de niveau, ranking et rang
-            document.getElementById('profile-level').textContent = `${currentLevel.icon} ${currentLevel.name}`;
-            document.getElementById('profile-level').style.background = `linear-gradient(135deg, ${currentLevel.color}, ${currentLevel.color}cc)`;
-            document.getElementById('profile-level').style.color = currentLevel.color === '#ffd700' ? '#1c1c1e' : 'white';
-
-            document.getElementById('profile-ranking').textContent = `⭐ ${rankingPoints.toLocaleString()} Points`;
-            
-            document.getElementById('profile-rank').textContent = globalRank ? `🏆 Rank: #${globalRank}` : '🏆 Rank: #-';
-
-            // ⚡ NOUVEAU : Barre de progression niveau
-            if (nextLevel) {
-                document.getElementById('progress-text').textContent = `Progress to ${nextLevel.name}`;
-                document.getElementById('progress-points').textContent = 
-                    `${rankingPoints} / ${nextLevel.minPoints} points`;
-                document.getElementById('progress-fill').style.width = `${progress}%`;
-                document.getElementById('level-progress-container').style.display = 'block';
-            } else {
-                document.getElementById('progress-text').textContent = 'Maximum level reached!';
-                document.getElementById('progress-points').textContent = `${rankingPoints} points`;
-                document.getElementById('progress-fill').style.width = '100%';
-            }
-
-            // ⚡ NOUVEAU : Ranking Statistics
-            document.getElementById('ranking-points').textContent = rankingPoints.toLocaleString();
-            document.getElementById('global-rank').textContent = globalRank ? `#${globalRank}` : '#-';
-            document.getElementById('current-level').textContent = currentLevel.name;
-            document.getElementById('current-streak').textContent = stats.ranking?.currentStreak || 0;
-            document.getElementById('best-streak').textContent = stats.ranking?.bestStreak || 0;
-            document.getElementById('perfect-games').textContent = stats.ranking?.perfectGames || 0;
+            // Level and Rating
+            const level = getPlayerLevel(stats.ranked.currentRating);
+            document.getElementById('profile-level').textContent = `🎮 ${level.name}`;
+            document.getElementById('profile-rating').textContent = `⭐ Rating: ${stats.ranked.currentRating}`;
+            document.getElementById('profile-rating').style.background = `linear-gradient(135deg, ${level.color}, ${level.color}cc)`;
 
             // Practice Stats
-            const practiceCompletionRate = stats.practiceGames > 0 ? 
-                Math.round((stats.gamesCompleted / stats.practiceGames) * 100) : 0;
-            const practiceAverageScore = stats.practiceGames > 0 ? 
-                Math.round(stats.ranking?.totalScore / stats.practiceGames) : 0;
+            const practiceCompletionRate = stats.practice.gamesPlayed > 0 ? 
+                Math.round((stats.practice.gamesCompleted / stats.practice.gamesPlayed) * 100) : 0;
+            const practiceAverage = stats.practice.gamesCompleted > 0 ? 
+                Math.round(stats.practice.totalScore / stats.practice.gamesCompleted) : 0;
 
-            document.getElementById('practice-games').textContent = stats.practiceGames?.toLocaleString() || 0;
-            document.getElementById('practice-completed').textContent = stats.gamesCompleted?.toLocaleString() || 0;
+            document.getElementById('practice-games').textContent = stats.practice.gamesPlayed.toLocaleString();
+            document.getElementById('practice-completed').textContent = stats.practice.gamesCompleted.toLocaleString();
             document.getElementById('practice-completion-rate').textContent = `${practiceCompletionRate}%`;
-            document.getElementById('practice-average-score').textContent = practiceAverageScore.toLocaleString();
-            
-            // ⚡ NOUVEAU : Temps total en practice
-            const practiceTimeHours = Math.floor((stats.totalTimeSpent || 0) / 3600);
-            const practiceTimeMinutes = Math.floor(((stats.totalTimeSpent || 0) % 3600) / 60);
-            document.getElementById('practice-total-time').textContent = `${practiceTimeHours}h ${practiceTimeMinutes}m`;
+            document.getElementById('practice-average-score').textContent = practiceAverage.toLocaleString();
+            document.getElementById('practice-total-score').textContent = stats.practice.totalScore.toLocaleString();
 
             // Ranked Stats
-            const rankedWinRate = stats.rankedGames > 0 ? 
-                Math.round((stats.totalGamesWon / stats.rankedGames) * 100) : 0;
-            const rankedAverageScore = stats.ranking?.averageScore || 0;
+            const rankedWinRate = stats.ranked.gamesPlayed > 0 ? 
+                Math.round((stats.ranked.gamesCompleted / stats.ranked.gamesPlayed) * 100) : 0;
 
-            document.getElementById('ranked-games').textContent = stats.rankedGames?.toLocaleString() || 0;
-            document.getElementById('ranked-won').textContent = stats.totalGamesWon?.toLocaleString() || 0;
+            document.getElementById('ranked-games').textContent = stats.ranked.gamesPlayed.toLocaleString();
+            document.getElementById('ranked-won').textContent = stats.ranked.gamesCompleted.toLocaleString();
             document.getElementById('ranked-win-rate').textContent = `${rankedWinRate}%`;
-            document.getElementById('ranked-average-score').textContent = rankedAverageScore.toLocaleString();
-            document.getElementById('ranked-abandoned').textContent = stats.gamesAbandoned?.toLocaleString() || 0;
-            document.getElementById('ranked-defeated').textContent = stats.gamesDefeated?.toLocaleString() || 0;
+            document.getElementById('ranked-current-rating').textContent = stats.ranked.currentRating.toLocaleString();
+            document.getElementById('ranked-peak-rating').textContent = stats.ranked.peakRating.toLocaleString();
+            document.getElementById('ranked-win-streak').textContent = stats.ranked.winStreak.toLocaleString();
 
             // General Stats
-            const totalHours = Math.floor((stats.totalTimeSpent || 0) / 3600);
-            const totalMinutes = Math.floor(((stats.totalTimeSpent || 0) % 3600) / 60);
-            const avgHours = Math.floor((stats.averageTime || 0) / 3600);
-            const avgMinutes = Math.floor(((stats.averageTime || 0) % 3600) / 60);
+            const totalHours = Math.floor((stats.totalPlayTime || 0) / 3600);
+            const totalMinutes = Math.floor(((stats.totalPlayTime || 0) % 3600) / 60);
 
-            document.getElementById('total-games').textContent = stats.totalGamesPlayed?.toLocaleString() || 0;
+            document.getElementById('total-games').textContent = stats.totalGames.toLocaleString();
             document.getElementById('total-time').textContent = `${totalHours}h ${totalMinutes}m`;
-            document.getElementById('average-time').textContent = `${avgHours}h ${avgMinutes}m`;
-            document.getElementById('overall-average-score').textContent = stats.averageScore?.toLocaleString() || 0;
+            document.getElementById('player-level-display').textContent = level.name;
             
-            // Dates
-            document.getElementById('member-since').textContent = userData.createdAt ? 
-                new Date(userData.createdAt.seconds * 1000).toLocaleDateString() : 
-                user.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString() : 'Recently';
+            // Member since - CORRIGÉ
+            const joinDate = userData.profile?.joinDate || userData.metadata?.creationTime;
+            if (joinDate) {
+                const date = joinDate instanceof Date ? joinDate : new Date(joinDate);
+                document.getElementById('member-since').textContent = date.toLocaleDateString();
+            } else {
+                document.getElementById('member-since').textContent = 'Recently';
+            }
             
-            document.getElementById('last-played').textContent = stats.lastPlayed ? 
-                new Date(stats.lastPlayed.seconds * 1000).toLocaleDateString() : 'Never';
+            document.getElementById('last-played').textContent = 'Check game history';
 
             // Best Scores
-            const bestScores = stats.bestScores || {};
+            const bestScores = stats.practice.bestScores || {};
             document.getElementById('best-easy').textContent = (bestScores.easy || 0).toLocaleString();
             document.getElementById('best-medium').textContent = (bestScores.medium || 0).toLocaleString();
             document.getElementById('best-hard').textContent = (bestScores.hard || 0).toLocaleString();
@@ -1678,90 +1417,12 @@
 
             // Show/hide ranked badge based on activity
             const rankedBadge = document.getElementById('ranked-badge');
-            if (stats.rankedGames === 0) {
+            if (stats.ranked.gamesPlayed === 0) {
                 rankedBadge.style.opacity = '0.5';
                 rankedBadge.textContent = '🏆 Try Ranked Mode';
             } else {
                 rankedBadge.style.opacity = '1';
                 rankedBadge.textContent = '🏆 Ranked Player';
-            }
-
-            // ⚡ NOUVEAU : Afficher les achievements s'il y en a
-            displayAchievements(stats, userData);
-        }
-
-        // ⚡ NOUVEAU : Fonction pour afficher les achievements
-        function displayAchievements(stats, userData) {
-            const achievements = [];
-            
-            // Générer des achievements basés sur les stats
-            if (stats.gamesCompleted > 0) {
-                achievements.push({
-                    icon: '🎉',
-                    title: 'First Victory',
-                    description: 'Completed your first game'
-                });
-            }
-            
-            if (stats.ranking?.perfectGames > 0) {
-                achievements.push({
-                    icon: '🌟',
-                    title: 'Perfect Player',
-                    description: `${stats.ranking.perfectGames} perfect game${stats.ranking.perfectGames > 1 ? 's' : ''}`
-                });
-            }
-            
-            if (stats.ranking?.bestStreak >= 5) {
-                achievements.push({
-                    icon: '🔥',
-                    title: 'Streak Master',
-                    description: `Best streak: ${stats.ranking.bestStreak} wins`
-                });
-            }
-            
-            if (stats.rankedGames >= 10) {
-                achievements.push({
-                    icon: '⚔️',
-                    title: 'Ranked Warrior',
-                    description: `${stats.rankedGames} ranked games played`
-                });
-            }
-            
-            if (stats.ranking?.rankingPoints >= 1000) {
-                achievements.push({
-                    icon: '💎',
-                    title: 'Point Collector',
-                    description: `${stats.ranking.rankingPoints.toLocaleString()} ranking points`
-                });
-            }
-            
-            const level = getPlayerLevel(stats.ranking?.rankingPoints || 0);
-            if (level.name !== 'Novice') {
-                achievements.push({
-                    icon: level.icon,
-                    title: `${level.name} Level`,
-                    description: `Reached ${level.name} level`
-                });
-            }
-
-            // Afficher les achievements
-            if (achievements.length > 0) {
-                const achievementsSection = document.getElementById('achievements-section');
-                const achievementsGrid = document.getElementById('achievements-grid');
-                
-                achievementsGrid.innerHTML = '';
-                achievements.forEach(achievement => {
-                    const achievementItem = document.createElement('div');
-                    achievementItem.className = 'achievement-item';
-                    achievementItem.innerHTML = `
-                        <div class="achievement-icon">${achievement.icon}</div>
-                        <div class="achievement-title">${achievement.title}</div>
-                        <div class="achievement-description">${achievement.description}</div>
-                    `;
-                    achievementsGrid.appendChild(achievementItem);
-                });
-                
-                achievementsSection.style.display = 'block';
             }
         }
 
@@ -1859,76 +1520,10 @@
             document.body.style.overflow = '';
         }
 
-        // ⚡ NOUVEAU : Fonctions utilitaires pour le profil
-        function formatRankingPoints(points) {
-            if (points >= 1000000) return `${(points / 1000000).toFixed(1)}M`;
-            if (points >= 1000) return `${(points / 1000).toFixed(1)}K`;
-            return points.toString();
-        }
-
-        function getPointsToNextLevel(rankingPoints) {
-            const nextLevel = getNextLevel(rankingPoints);
-            if (!nextLevel) return 0;
-            return nextLevel.minPoints - rankingPoints;
-        }
-
-        function calculateWinRate(won, total) {
-            if (total === 0) return 0;
-            return Math.round((won / total) * 100);
-        }
-
-        function formatTime(seconds) {
-            if (!seconds) return '0h 0m';
-            const hours = Math.floor(seconds / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            return `${hours}h ${minutes}m`;
-        }
-
-        function formatDate(timestamp) {
-            if (!timestamp) return 'Never';
-            
-            let date;
-            if (timestamp.seconds) {
-                // Firestore Timestamp
-                date = new Date(timestamp.seconds * 1000);
-            } else if (typeof timestamp === 'string') {
-                date = new Date(timestamp);
-            } else {
-                date = timestamp;
-            }
-            
-            return date.toLocaleDateString();
-        }
-
-        // ⚡ NOUVEAU : Fonction pour mettre à jour les stats en temps réel
-        function refreshStats() {
-            if (currentUser) {
-                loadUserProfile(currentUser);
-            }
-        }
-
-        // ⚡ NOUVEAU : Auto-refresh toutes les 5 minutes si l'utilisateur est actif
-        let refreshInterval;
-        function startAutoRefresh() {
-            refreshInterval = setInterval(() => {
-                if (document.visibilityState === 'visible' && currentUser) {
-                    console.log('🔄 Auto-refreshing profile stats...');
-                    refreshStats();
-                }
-            }, 5 * 60 * 1000); // 5 minutes
-        }
-
-        function stopAutoRefresh() {
-            if (refreshInterval) {
-                clearInterval(refreshInterval);
-                refreshInterval = null;
-            }
-        }
-
         // ============= INITIALIZATION =============
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Firebase Auth
             initializeProfileAuth();
-            startAutoRefresh();
 
             // Mobile menu handlers
             const mobileHamburger = document.getElementById('mobile-hamburger');
@@ -1952,31 +1547,13 @@
             if (mobileClose) {
                 mobileClose.addEventListener('click', closeMobileMenu);
             }
-
-            // Stop auto-refresh when page is unloaded
-            window.addEventListener('beforeunload', stopAutoRefresh);
-            
-            // Handle visibility change
-            document.addEventListener('visibilitychange', function() {
-                if (document.visibilityState === 'visible') {
-                    startAutoRefresh();
-                } else {
-                    stopAutoRefresh();
-                }
-            });
         });
 
-        // ⚡ NOUVEAU : Fonctions utilitaires exposées globalement
-        window.profileUtils = {
-            refreshStats,
-            formatRankingPoints,
-            getPointsToNextLevel,
-            calculateWinRate,
-            formatTime,
-            formatDate
-        };
-
-        console.log('✅ Profile page with complete ranking system loaded successfully!');
+        // ============= DEBUG ET TEST =============
+        console.log('🧪 Testing Firebase Integration...');
+        console.log('Auth:', window.firebaseAuth?.auth ? '✅' : '❌');
+        console.log('DB:', window.firebaseAuth?.db ? '✅' : '❌');
+        console.log('Functions:', Object.keys(window.firebaseAuth || {}));
     </script>
 </body>
 </html>

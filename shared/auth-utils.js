@@ -20,34 +20,8 @@
             retryDelay: 1000
         },
 
-        // User data operations
-        getUserData: async function(user) {
-            try {
-                if (!user || !user.uid) {
-                    console.warn('Invalid user provided to getUserData');
-                    return null;
-                }
-                return await window.FirebaseManager._getUserDataWithCache(user);
-            } catch (error) {
-                console.error('Error getUserData:', error);
-                return user;
-            }
-        },
-
-        updateUserData: async function(userId, updateData) {
-            try {
-                return await window.FirebaseManager.updateUserData(userId, updateData);
-            } catch (error) {
-                console.error('Error updateUserData:', error);
-                throw new Error('Failed to update user data');
-            }
-        },
-
-        invalidateUserCache: function(userId) {
-            window.FirebaseManager.invalidateUserCache(userId);
-        },
-
-        // Gamertag validation
+        // ============= GAMERTAG VALIDATION =============
+        
         validateGamertag: function(gamertag) {
             if (!gamertag || typeof gamertag !== 'string') {
                 return { isValid: false, error: 'Gamertag is required' };
@@ -106,7 +80,8 @@
             }
         },
 
-        // Utility functions
+        // ============= UTILITY FUNCTIONS =============
+        
         formatTime: function(seconds) {
             try {
                 const mins = Math.floor(seconds / 60);
@@ -170,7 +145,8 @@
             return new Promise(resolve => setTimeout(resolve, ms));
         },
 
-        // Notification system
+        // ============= NOTIFICATION SYSTEM =============
+        
         showSuccess: function(message, duration = null) {
             this.showNotification(message, 'success', duration);
         },
@@ -443,12 +419,13 @@
             return div.innerHTML;
         },
 
-        // Post-login handling
+        // ============= POST-LOGIN HANDLING =============
+        
         handlePostLogin: function(user, redirectTo = null) {
             try {
                 if (!user) return;
                 
-                this.getUserData(user).then(userData => {
+                window.FirebaseManager._getUserDataWithCache(user).then(userData => {
                     if (!window.FirebaseManager.isProfileComplete(userData)) {
                         this.showInfo('Please complete your profile to continue.');
                         setTimeout(() => {
@@ -481,15 +458,16 @@
         }
     };
 
-    // Global aliases for compatibility (REMOVED duplicates that exist in firebase-manager)
-    window.getUserData = (user) => AuthUtils.getUserData(user);
+    // ============= GLOBAL ALIASES - NOTIFICATIONS ONLY =============
+    
     window.showSuccess = (message, duration) => AuthUtils.showSuccess(message, duration);
     window.showError = (message, duration) => AuthUtils.showError(message, duration);
     window.showInfo = (message, duration) => AuthUtils.showInfo(message, duration);
+    window.showWarning = (message, duration) => AuthUtils.showWarning(message, duration);
 
     function initAuthUtils() {
         try {
-            console.log('AuthUtils initialized');
+            console.log('✅ AuthUtils initialized - Firebase Manager authority respected');
         } catch (error) {
             console.error('Error initializing AuthUtils:', error);
         }

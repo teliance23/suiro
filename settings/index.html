@@ -11,129 +11,8 @@
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- Firebase SDK - CORRIGÉ avec tous les imports nécessaires -->
-    <script type="module">
-        // Import Firebase functions - IMPORTS COMPLETS
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, onAuthStateChanged, signOut, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyDHP3A6BZXAx72fY0_BFJQe9y1F2Za_Xo8",
-            authDomain: "suirodoku-web.firebaseapp.com",
-            projectId: "suirodoku-web",
-            storageBucket: "suirodoku-web.firebasestorage.app",
-            messagingSenderId: "936879624195",
-            appId: "1:936879624195:web:e3d2682df7c9b213d87e36",
-            measurementId: "G-RPJXTCGLZN"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        // Make Firebase functions globally available - COMPLET
-        window.firebaseAuth = {
-            auth,
-            db,
-            onAuthStateChanged,
-            signOut,
-            updateProfile,
-            doc,
-            getDoc,
-            setDoc,
-            updateDoc,
-            collection,
-            query,
-            where,
-            orderBy,
-            limit,
-            getDocs
-        };
-
-        // ============= FONCTIONS GLOBALES DE PROFIL =============
-        
-        // Fonction pour obtenir le nom d'affichage selon les préférences
-        window.getDisplayName = function(userData) {
-            if (userData.profile?.displayPreference === 'gamertag' && userData.profile?.gamertag) {
-                return userData.profile.gamertag;
-            }
-            return userData.displayName || 'Anonymous';
-        };
-
-        // Fonction pour obtenir le drapeau selon la nationalité
-        window.getFlagEmoji = function(countryCode) {
-            const flags = {
-                'FR': '🇫🇷', 'US': '🇺🇸', 'GB': '🇬🇧', 'DE': '🇩🇪', 'ES': '🇪🇸',
-                'IT': '🇮🇹', 'JP': '🇯🇵', 'CN': '🇨🇳', 'BR': '🇧🇷', 'CA': '🇨🇦',
-                'AU': '🇦🇺', 'IN': '🇮🇳', 'RU': '🇷🇺', 'MX': '🇲🇽', 'KR': '🇰🇷',
-                'NL': '🇳🇱', 'SE': '🇸🇪', 'NO': '🇳🇴', 'DK': '🇩🇰', 'FI': '🇫🇮',
-                'CH': '🇨🇭', 'AT': '🇦🇹', 'BE': '🇧🇪', 'PL': '🇵🇱', 'PT': '🇵🇹'
-            };
-            return flags[countryCode] || '🌍';
-        };
-
-        // Fonction pour vérifier si le profil est complet
-        window.isProfileComplete = function(userData) {
-            return userData.profile?.isProfileComplete === true;
-        };
-
-        // Fonction pour récupérer les données utilisateur complètes - CORRIGÉE
-        window.getUserData = async function(user) {
-            try {
-                const userRef = doc(db, 'users', user.uid);
-                const userDoc = await getDoc(userRef);
-                
-                if (userDoc.exists()) {
-                    return { ...user, ...userDoc.data() };
-                }
-                
-                // Créer un profil par défaut si aucune donnée
-                const defaultProfile = {
-                    displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
-                    email: user.email,
-                    profile: {
-                        isProfileComplete: false,
-                        displayPreference: 'realname',
-                        joinDate: new Date(),
-                        gamertag: '',
-                        nationality: '',
-                        bio: ''
-                    },
-                    preferences: {
-                        defaultDifficulty: 'easy',
-                        defaultMode: 'practice'
-                    },
-                    privacy: {
-                        profileVisibility: 'public',
-                        showInLeaderboards: true
-                    }
-                };
-                
-                // Sauvegarder le profil par défaut
-                await setDoc(userRef, defaultProfile);
-                return { ...user, ...defaultProfile };
-                
-            } catch (error) {
-                console.error('Error fetching user data:', error);
-                throw new Error('Failed to load user data');
-            }
-        };
-
-        console.log('🔥 Firebase initialized on settings page');
-        
-        // Optimisation de performance
-        auth.onAuthStateChanged((user) => {
-            if (user) {
-                getUserData(user).catch(console.error);
-            }
-        });
-    </script>
-    
     <style>
-        /* ============= RESET ET BASE ============= */
+        /* ============= RESET ET BASE - STYLES SPÉCIFIQUES SETTINGS ============= */
         * {
             margin: 0;
             padding: 0;
@@ -163,102 +42,7 @@
             caret-color: #007aff;
         }
 
-        /* ============= HEADER DYNAMIQUE - STYLES ============= */
-        .user-menu {
-            position: relative;
-            display: inline-block;
-        }
-
-        .user-name {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            color: #4a5568;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .user-name:hover {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: rgba(255, 255, 255, 0.3);
-            color: #2d3748;
-        }
-
-        .user-name::after {
-            content: '▼';
-            font-size: 10px;
-            transition: transform 0.3s ease;
-        }
-
-        .user-menu:hover .user-name::after {
-            transform: rotate(180deg);
-        }
-
-        .dropdown-menu {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background: white;
-            border: 1px solid rgba(229, 229, 234, 0.3);
-            border-radius: 12px;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
-            min-width: 200px;
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-10px);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-        }
-
-        .user-menu:hover .dropdown-menu {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        .dropdown-menu a {
-            display: block;
-            padding: 14px 20px;
-            color: #1c1c1e;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            border-bottom: 1px solid rgba(229, 229, 234, 0.3);
-        }
-
-        .dropdown-menu a:last-child {
-            border-bottom: none;
-        }
-
-        .dropdown-menu a:hover {
-            background: rgba(0, 122, 255, 0.05);
-            color: #007aff;
-        }
-
-        .dropdown-menu a:first-child {
-            border-top-left-radius: 12px;
-            border-top-right-radius: 12px;
-        }
-
-        .dropdown-menu a:last-child {
-            border-bottom-left-radius: 12px;
-            border-bottom-right-radius: 12px;
-        }
-
-        .user-flag {
-            font-size: 16px;
-            margin-right: 4px;
-        }
-
-        /* ============= HEADER ============= */
+        /* ============= HEADER BASIQUE (styles injectés par auth-header.js) ============= */
         .header {
             display: flex;
             justify-content: flex-end;
@@ -321,194 +105,6 @@
             display: flex;
             align-items: center;
             gap: 12px;
-        }
-
-        .auth-btn {
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: none;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-        }
-
-        .login-btn {
-            background: transparent;
-            border: 2px solid #e2e8f0;
-            color: #4a5568;
-        }
-
-        .login-btn:hover {
-            background-color: #f7fafc;
-            border-color: #cbd5e0;
-            color: #2d3748;
-        }
-
-        /* ============= MOBILE HAMBURGER ============= */
-        .mobile-hamburger {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            width: 48px;
-            height: 48px;
-            background: white;
-            border: 1px solid #e5e5ea;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-            z-index: 1000;
-            transition: all 0.3s ease;
-            gap: 4px;
-        }
-
-        .mobile-hamburger:hover {
-            background-color: #f8f9fa;
-            transform: scale(1.05);
-        }
-
-        .hamburger-line {
-            width: 20px;
-            height: 2px;
-            background-color: #4a5568;
-            border-radius: 1px;
-            transition: all 0.3s ease;
-        }
-
-        .mobile-hamburger.active .hamburger-line:nth-child(1) {
-            transform: rotate(45deg) translate(5px, 5px);
-        }
-
-        .mobile-hamburger.active .hamburger-line:nth-child(2) {
-            opacity: 0;
-        }
-
-        .mobile-hamburger.active .hamburger-line:nth-child(3) {
-            transform: rotate(-45deg) translate(7px, -6px);
-        }
-
-        .mobile-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: none;
-            z-index: 2000;
-            backdrop-filter: blur(5px);
-        }
-
-        .mobile-overlay.show {
-            display: block;
-        }
-
-        .mobile-menu {
-            position: fixed;
-            top: 0;
-            right: -300px;
-            width: 300px;
-            height: 100%;
-            background: white;
-            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
-            z-index: 2001;
-            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            flex-direction: column;
-            padding: 20px 0;
-        }
-
-        .mobile-menu.show {
-            right: 0;
-        }
-
-        .mobile-menu-header {
-            padding: 0 20px 20px 20px;
-            border-bottom: 1px solid #e5e5ea;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .mobile-logo {
-            font-size: 24px;
-            font-weight: 700;
-            color: #4a5568;
-            letter-spacing: -0.6px;
-        }
-
-        .mobile-close {
-            width: 32px;
-            height: 32px;
-            background: none;
-            border: none;
-            font-size: 24px;
-            color: #666;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 6px;
-            transition: background-color 0.2s ease;
-        }
-
-        .mobile-close:hover {
-            background-color: #f5f5f5;
-        }
-
-        .mobile-menu-content {
-            flex: 1;
-            padding: 20px 0;
-            overflow-y: auto;
-        }
-
-        .mobile-nav-section {
-            margin-bottom: 32px;
-        }
-
-        .mobile-section-title {
-            font-size: 12px;
-            font-weight: 600;
-            color: #8e8e93;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 0 20px;
-            margin-bottom: 12px;
-        }
-
-        .mobile-nav-item {
-            display: block;
-            padding: 16px 20px;
-            color: #1c1c1e;
-            text-decoration: none;
-            font-size: 16px;
-            font-weight: 500;
-            border: none;
-            background: none;
-            width: 100%;
-            text-align: left;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-
-        .mobile-nav-item:hover {
-            background-color: #f8f9fa;
-        }
-
-        .mobile-nav-item.logout {
-            color: #ff3b30;
-            font-weight: 600;
-        }
-
-        .mobile-nav-item.logout:hover {
-            background-color: #fff2f2;
         }
 
         /* ============= SETTINGS CONTAINER ============= */
@@ -832,7 +428,7 @@
             font-weight: 500;
         }
 
-        /* ============= SUCCESS MESSAGE ============= */
+        /* ============= SUCCESS/ERROR MESSAGES ============= */
         .success-message {
             background: linear-gradient(135deg, #10b981, #059669);
             color: white;
@@ -854,7 +450,6 @@
             font-size: 20px;
         }
 
-        /* ============= ERROR MESSAGE ============= */
         .error-message {
             background: linear-gradient(135deg, #ff3b30, #d70015);
             color: white;
@@ -956,10 +551,6 @@
                 display: none;
             }
 
-            .mobile-hamburger {
-                display: flex;
-            }
-
             .settings-container {
                 padding: 80px 16px 20px 16px;
             }
@@ -1031,57 +622,7 @@
 </head>
 <body>
     <div class="main-content">
-        <!-- Menu Mobile Overlay -->
-        <div class="mobile-overlay" id="mobile-overlay"></div>
-
-        <!-- Menu Mobile -->
-        <div class="mobile-menu" id="mobile-menu">
-            <div class="mobile-menu-header">
-                <div class="mobile-logo">Suirodoku.com</div>
-                <button class="mobile-close" id="mobile-close">×</button>
-            </div>
-            
-            <div class="mobile-menu-content">
-                <div class="mobile-nav-section">
-                    <div class="mobile-section-title">Navigation</div>
-                    <button class="mobile-nav-item" onclick="navigateTo('tutorial'); closeMobileMenu();">
-                        How to Play
-                    </button>
-                    <button class="mobile-nav-item" onclick="navigateTo('leaderboard'); closeMobileMenu();">
-                        Leaderboards
-                    </button>
-                </div>
-                
-                <div class="mobile-nav-section">
-                    <div class="mobile-section-title">Game</div>
-                    <button class="mobile-nav-item" onclick="navigateTo('home'); closeMobileMenu();">
-                        Play Game
-                    </button>
-                </div>
-                
-                <!-- Section Account - Dynamique selon l'état de connexion -->
-                <div class="mobile-nav-section" id="mobile-auth-section">
-                    <div class="mobile-section-title">Account</div>
-                    <!-- Contenu dynamique injecté par JavaScript -->
-                </div>
-                
-                <div class="mobile-nav-section">
-                    <div class="mobile-section-title">Legal</div>
-                    <button class="mobile-nav-item" onclick="navigateTo('legal'); closeMobileMenu();">
-                        Privacy & Terms
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Mobile Hamburger Button -->
-        <div class="mobile-hamburger" id="mobile-hamburger">
-            <div class="hamburger-line"></div>
-            <div class="hamburger-line"></div>
-            <div class="hamburger-line"></div>
-        </div>
-
-        <!-- Header -->
+        <!-- Header - CSS complexe injecté par auth-header.js -->
         <div class="header">
             <div class="logo" onclick="goToHome()">Suirodoku.com</div>
             
@@ -1098,7 +639,7 @@
             
             <!-- Auth Buttons (Desktop) - Dynamique selon l'état de connexion -->
             <div class="auth-buttons" id="desktop-auth-buttons">
-                <!-- Contenu dynamique injecté par JavaScript -->
+                <!-- Contenu dynamique injecté par auth-header.js -->
             </div>
         </div>
 
@@ -1306,13 +847,20 @@
         </div>
     </footer>
 
+    <!-- Scripts optimisés - Plus de duplication ! -->
+    <script src="../firebase-config.js"></script>
+    <script src="../auth-utils.js"></script>
+    <script src="../auth-header.js"></script>
+    <script src="../menu.js"></script>
+    
+    <!-- Code spécifique à Settings uniquement -->
     <script>
-        // ============= GLOBAL VARIABLES =============
+        // ============= VARIABLES GLOBALES SETTINGS ============= 
         let currentUser = null;
         let userData = null;
         let isSaving = false;
 
-        // ============= FIREBASE FUNCTIONS =============
+        // ============= FIREBASE AUTH SETTINGS =============
         function initializeSettingsAuth() {
             if (typeof window.firebaseAuth === 'undefined') {
                 setTimeout(initializeSettingsAuth, 100);
@@ -1326,7 +874,14 @@
                 if (user) {
                     console.log('User authenticated:', user.email);
                     loadUserSettings(user);
-                    updateHeaderAuthState(user);
+                    
+                    // Mettre à jour header et menu
+                    if (typeof window.AuthHeader !== 'undefined') {
+                        window.AuthHeader.updateAuthState(user);
+                    }
+                    if (typeof window.MobileMenu !== 'undefined') {
+                        window.MobileMenu.syncWithAuthHeader(user);
+                    }
                 } else {
                     console.log('User not authenticated, redirecting...');
                     window.location.href = '../auth/';
@@ -1334,90 +889,16 @@
             });
         }
 
-        // ============= GESTION DYNAMIQUE DU HEADER - CORRIGÉ =============
-        async function updateHeaderAuthState(user) {
-            const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
-            const mobileAuthSection = document.getElementById('mobile-auth-section');
-            
-            if (user) {
-                try {
-                    const userData = await getUserData(user);
-                    const displayName = getDisplayName(userData);
-                    const flag = userData.profile?.nationality ? getFlagEmoji(userData.profile.nationality) : '';
-                    
-                    if (desktopAuthButtons) {
-                        desktopAuthButtons.innerHTML = `
-                            <div class="user-menu">
-                                <div class="user-name">
-                                    <span class="user-flag">${flag}</span>
-                                    <span>${displayName}</span>
-                                </div>
-                                <div class="dropdown-menu">
-                                    <a href="../profile/">👤 My Profile</a>
-                                    <a href="../stats/">📊 My Statistics</a>
-                                    <a href="../settings/">⚙️ Settings</a>
-                                    <a href="#" onclick="signOutUser()">🚪 Sign Out</a>
-                                </div>
-                            </div>
-                        `;
-                    }
-                    
-                    if (mobileAuthSection) {
-                        mobileAuthSection.innerHTML = `
-                            <div class="mobile-section-title">Account</div>
-                            <button class="mobile-nav-item" onclick="navigateTo('profile'); closeMobileMenu();">
-                                👤 My Profile
-                            </button>
-                            <button class="mobile-nav-item" onclick="navigateTo('stats'); closeMobileMenu();">
-                                📊 My Statistics
-                            </button>
-                            <button class="mobile-nav-item" onclick="navigateTo('settings'); closeMobileMenu();">
-                                ⚙️ Settings
-                            </button>
-                            <button class="mobile-nav-item logout" onclick="signOutUser(); closeMobileMenu();">
-                                🚪 Sign Out
-                            </button>
-                        `;
-                    }
-                } catch (error) {
-                    console.error('Error updating header:', error);
-                    if (desktopAuthButtons) {
-                        desktopAuthButtons.innerHTML = `<button class="auth-btn login-btn" onclick="signOutUser()">Sign Out</button>`;
-                    }
-                }
-            } else {
-                if (desktopAuthButtons) {
-                    desktopAuthButtons.innerHTML = `<button class="auth-btn login-btn" onclick="navigateTo('auth')">Log In</button>`;
-                }
-                if (mobileAuthSection) {
-                    mobileAuthSection.innerHTML = `
-                        <div class="mobile-section-title">Account</div>
-                        <button class="mobile-nav-item" onclick="navigateTo('auth'); closeMobileMenu();">Log In</button>
-                    `;
-                }
-            }
-        }
-
-        // Fonction de déconnexion - RENFORCÉE
-        window.signOutUser = async function() {
-            const confirmed = confirm('Are you sure you want to sign out?');
-            if (!confirmed) return;
-
-            try {
-                const { auth, signOut } = window.firebaseAuth;
-                await signOut(auth);
-                console.log('✅ User signed out successfully');
-                window.location.href = '../';
-            } catch (error) {
-                console.error('❌ Error signing out:', error);
-                showError('Error signing out. Please try again.');
-            }
-        };
-
-        // ============= LOAD USER SETTINGS - AMÉLIORÉ =============
+        // ============= LOAD USER SETTINGS =============
         async function loadUserSettings(user) {
             try {
-                userData = await getUserData(user);
+                // Utiliser getUserData depuis auth-utils.js
+                if (typeof window.AuthUtils !== 'undefined') {
+                    userData = await window.AuthUtils.getUserData(user);
+                } else {
+                    // Fallback si auth-utils pas disponible
+                    userData = await getUserData(user);
+                }
                 
                 // Update UI with user data
                 updateSettingsUI(userData);
@@ -1432,7 +913,7 @@
             }
         }
 
-        // ============= UPDATE SETTINGS UI - CORRIGÉ =============
+        // ============= UPDATE SETTINGS UI =============
         function updateSettingsUI(userData) {
             // Avatar and basic info
             const displayName = getDisplayName(userData) || 'Anonymous Player';
@@ -1482,7 +963,7 @@
             });
         }
 
-        // ============= SAVE SETTINGS - RENFORCÉ =============
+        // ============= SAVE SETTINGS =============
         async function saveSettings() {
             if (isSaving) return;
             
@@ -1505,7 +986,7 @@
                 const gamertag = document.getElementById('gamertag').value.trim();
                 const nationality = document.getElementById('nationality').value;
                 
-                // Validation avancée
+                // Validation
                 if (!gamertag || gamertag.length < 3) {
                     throw new Error('Gamertag must be at least 3 characters long');
                 }
@@ -1564,7 +1045,9 @@
                 showSuccess('Settings saved successfully!');
                 
                 // Update header to reflect changes
-                updateHeaderAuthState(user);
+                if (typeof window.AuthHeader !== 'undefined') {
+                    window.AuthHeader.updateAuthState(user);
+                }
 
                 console.log('✅ Settings saved successfully');
 
@@ -1632,33 +1115,21 @@
 
         // ============= NAVIGATION FUNCTIONS =============
         function navigateTo(page) {
-            switch(page) {
-                case 'home':
-                    window.location.href = '../';
-                    break;
-                case 'profile':
-                    window.location.href = '../profile/';
-                    break;
-                case 'stats':
-                    window.location.href = '../stats/';
-                    break;
-                case 'settings':
-                    window.location.href = '../settings/';
-                    break;
-                case 'auth':
-                    window.location.href = '../auth/';
-                    break;
-                case 'tutorial':
-                    window.location.href = '../tutorial/';
-                    break;
-                case 'leaderboard':
-                    window.location.href = '../leaderboard/';
-                    break;
-                case 'legal':
-                    window.location.href = '../legal/';
-                    break;
-                default:
-                    console.log('Navigate to:', page);
+            const routes = {
+                'home': '../',
+                'profile': '../profile/',
+                'stats': '../stats/',
+                'settings': '../settings/',
+                'auth': '../auth/',
+                'tutorial': '../tutorial/',
+                'leaderboard': '../leaderboard/',
+                'legal': '../legal/'
+            };
+            
+            if (routes[page]) {
+                window.location.href = routes[page];
+            } else {
+                console.warn(`Route inconnue: ${page}`);
             }
         }
 
@@ -1666,29 +1137,53 @@
             window.location.href = '../';
         }
 
-        // ============= MENU MOBILE =============
-        function openMobileMenu() {
-            const overlay = document.getElementById('mobile-overlay');
-            const menu = document.getElementById('mobile-menu');
-            const hamburger = document.getElementById('mobile-hamburger');
-            
-            overlay.classList.add('show');
-            menu.classList.add('show');
-            hamburger.classList.add('active');
-            
-            document.body.style.overflow = 'hidden';
+        // ============= FONCTIONS UTILITAIRES (fallback si auth-utils indisponible) =============
+        async function getUserData(user) {
+            try {
+                const { db, doc, getDoc, setDoc } = window.firebaseAuth;
+                const userRef = doc(db, 'users', user.uid);
+                const userDoc = await getDoc(userRef);
+                
+                if (userDoc.exists()) {
+                    return { ...user, ...userDoc.data() };
+                }
+                
+                // Créer un profil par défaut si aucune donnée
+                const defaultProfile = {
+                    displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+                    email: user.email,
+                    profile: {
+                        isProfileComplete: false,
+                        displayPreference: 'realname',
+                        joinDate: new Date(),
+                        gamertag: '',
+                        nationality: '',
+                        bio: ''
+                    },
+                    preferences: {
+                        defaultDifficulty: 'easy',
+                        defaultMode: 'practice'
+                    },
+                    privacy: {
+                        profileVisibility: 'public',
+                        showInLeaderboards: true
+                    }
+                };
+                
+                await setDoc(userRef, defaultProfile);
+                return { ...user, ...defaultProfile };
+                
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+                throw new Error('Failed to load user data');
+            }
         }
 
-        function closeMobileMenu() {
-            const overlay = document.getElementById('mobile-overlay');
-            const menu = document.getElementById('mobile-menu');
-            const hamburger = document.getElementById('mobile-hamburger');
-            
-            overlay.classList.remove('show');
-            menu.classList.remove('show');
-            hamburger.classList.remove('active');
-            
-            document.body.style.overflow = '';
+        function getDisplayName(userData) {
+            if (userData?.profile?.displayPreference === 'gamertag' && userData?.profile?.gamertag) {
+                return userData.profile.gamertag;
+            }
+            return userData?.displayName || userData?.email?.split('@')[0] || 'Anonymous';
         }
 
         // ============= INITIALIZATION =============
@@ -1703,29 +1198,6 @@
                 });
             });
 
-            // Mobile menu handlers
-            const mobileHamburger = document.getElementById('mobile-hamburger');
-            const mobileOverlay = document.getElementById('mobile-overlay');
-            const mobileClose = document.getElementById('mobile-close');
-            
-            if (mobileHamburger) {
-                mobileHamburger.addEventListener('click', function() {
-                    if (this.classList.contains('active')) {
-                        closeMobileMenu();
-                    } else {
-                        openMobileMenu();
-                    }
-                });
-            }
-            
-            if (mobileOverlay) {
-                mobileOverlay.addEventListener('click', closeMobileMenu);
-            }
-            
-            if (mobileClose) {
-                mobileClose.addEventListener('click', closeMobileMenu);
-            }
-
             // Keyboard shortcut for save
             document.addEventListener('keydown', function(e) {
                 if (e.ctrlKey && e.key === 's') {
@@ -1734,12 +1206,6 @@
                 }
             });
         });
-
-        // ============= DEBUG ET TEST =============
-        console.log('🧪 Testing Firebase Integration...');
-        console.log('Auth:', window.firebaseAuth?.auth ? '✅' : '❌');
-        console.log('DB:', window.firebaseAuth?.db ? '✅' : '❌');
-        console.log('Functions:', Object.keys(window.firebaseAuth || {}));
     </script>
 </body>
 </html>

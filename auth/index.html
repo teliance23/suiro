@@ -1022,20 +1022,147 @@
                 }
             },
 
+            // ============= FONCTION GOOGLE SIGN-IN AVEC DEBUG COMPLET =============
             signInWithGoogle: async function() {
                 if (this.isLoading || this.isBlocked()) return;
                 
-                this.setLoading(true, 'google-btn', 'Signing in with Google...');
+                // Debug complet pour diagnostiquer le problème OAuth
+                console.group('🔥 GOOGLE SIGN-IN DEBUG COMPLET');
+                console.log('🚀 Début signInWithGoogle');
+                
+                this.setLoading(true, 'google-btn', 'Connecting to Google...');
                 
                 try {
+                    // 1. Vérification Firebase
+                    console.log('📡 Initialisation Firebase...');
                     const firebase = await window.FirebaseManager.initialize();
-                    if (!firebase) throw new Error('Firebase not available');
                     
-                    await firebase.signInWithPopup(firebase.auth, firebase.googleProvider);
+                    if (!firebase) {
+                        throw new Error('Firebase initialization failed');
+                    }
+                    
+                    console.log('✅ Firebase OK');
+                    console.log('- Auth object:', !!firebase.auth);
+                    console.log('- Google Provider:', !!firebase.googleProvider);
+                    console.log('- signInWithPopup:', !!firebase.signInWithPopup);
+                    
+                    // 2. Vérifications de sécurité
+                    if (!firebase.auth || !firebase.googleProvider || !firebase.signInWithPopup) {
+                        throw new Error('Firebase components missing');
+                    }
+                    
+                    // 3. Configuration détaillée du provider
+                    console.log('⚙️ Configuration Google Provider...');
+                    const provider = firebase.googleProvider;
+                    
+                    // Afficher la configuration actuelle
+                    console.log('Provider configuré avec scopes et paramètres');
+                    
+                    // 4. Test de la configuration OAuth
+                    console.log('🔧 Test configuration OAuth...');
+                    console.log('Domain actuel:', window.location.hostname);
+                    console.log('URL complète:', window.location.href);
+                    console.log('Domain autorisé ?', this.checkAuthorizedDomain());
+                    console.log('Popup bloquée ?', this.checkPopupBlocked());
+                    console.log('Réseau OK ?', navigator.onLine);
+                    
+                    // 5. Tentative de connexion avec gestion d'erreurs détaillée
+                    console.log('🚀 Lancement popup Google...');
+                    const result = await firebase.signInWithPopup(firebase.auth, provider);
+                    
+                    // 6. Succès - Affichage détaillé
+                    console.log('✅ SUCCÈS Google Sign-In !');
+                    console.log('👤 User result:', {
+                        uid: result.user.uid,
+                        email: result.user.email,
+                        displayName: result.user.displayName,
+                        photoURL: result.user.photoURL
+                    });
+                    
+                    // 7. Vérification credential
+                    if (result.credential) {
+                        console.log('🎫 Credential reçu:', result.credential);
+                    }
+                    
+                    console.log('🔄 Attente création document Firestore...');
+                    
+                    // Ne pas appeler setLoading(false) car handleSuccessfulAuth va rediriger
+                    
                 } catch (error) {
-                    console.error('Error Google sign-in:', error);
+                    console.group('❌ ERREUR GOOGLE SIGN-IN DÉTAILLÉE');
+                    console.error('Type d\'erreur:', typeof error);
+                    console.error('Code erreur:', error.code);
+                    console.error('Message:', error.message);
+                    console.error('Stack trace:', error.stack);
+                    console.error('Objet erreur complet:', error);
+                    console.groupEnd();
+                    
                     this.setLoading(false);
-                    this.handleAuthError(error, 'Google sign-in failed');
+                    
+                    // 8. Gestion d'erreurs OAuth spécifiques avec alertes détaillées
+                    if (error.code === 'auth/popup-closed-by-user') {
+                        console.log('ℹ️ Popup fermée par utilisateur - pas d\'erreur');
+                        // Ne pas afficher d'erreur si l'utilisateur ferme volontairement
+                        return;
+                    } else if (error.code === 'auth/unauthorized-domain') {
+                        console.error('🚫 DOMAINE NON AUTORISÉ !');
+                        alert('❌ ERREUR CONFIGURATION OAUTH\n\n' +
+                              'Le domaine suirodoku.com n\'est pas autorisé dans Google Cloud Console.\n\n' +
+                              'Vérifiez :\n' +
+                              '• Google Cloud Console\n' +
+                              '• APIs & Services → Credentials\n' +
+                              '• OAuth 2.0 Client → Origines JavaScript autorisées\n' +
+                              '• Ajoutez : https://suirodoku.com');
+                        return;
+                    } else if (error.code === 'auth/popup-blocked') {
+                        this.showError('Popup bloquée. Veuillez autoriser les popups pour suirodoku.com et réessayer.');
+                    } else if (error.code === 'auth/cancelled-popup-request') {
+                        console.log('ℹ️ Requête popup annulée - normale');
+                        return;
+                    } else if (error.code === 'auth/network-request-failed') {
+                        this.showError('Erreur réseau. Vérifiez votre connexion internet et réessayez.');
+                    } else if (error.code === 'auth/internal-error') {
+                        this.showError('Erreur interne Firebase. Veuillez réessayer dans quelques instants.');
+                    } else {
+                        // Erreur inconnue - afficher le code pour diagnostic
+                        this.showError(`Erreur OAuth inconnue: ${error.code}\n\nMessage: ${error.message}\n\nVeuillez partager cette erreur avec le support.`);
+                        console.error('⚠️ ERREUR INCONNUE - Veuillez partager ce code:', error.code);
+                        
+                        // Alerte avec diagnostic complet
+                        alert('❌ ERREUR OAUTH DÉTAILLÉE\n\n' +
+                              `Code: ${error.code}\n` +
+                              `Message: ${error.message}\n\n` +
+                              `Domain: ${window.location.hostname}\n` +
+                              `URL: ${window.location.href}\n\n` +
+                              'Veuillez partager ces informations pour résoudre le problème.');
+                    }
+                }
+                
+                console.groupEnd();
+            },
+
+            // Fonctions helper pour le diagnostic OAuth
+            checkAuthorizedDomain: function() {
+                const currentDomain = window.location.hostname;
+                const authorizedDomains = ['suirodoku.com', 'www.suirodoku.com', 'localhost', '127.0.0.1'];
+                const isAuthorized = authorizedDomains.includes(currentDomain);
+                console.log(`🔍 Domain check: ${currentDomain} → ${isAuthorized ? 'AUTORISÉ' : 'NON AUTORISÉ'}`);
+                return isAuthorized;
+            },
+
+            checkPopupBlocked: function() {
+                try {
+                    const popup = window.open('', '', 'width=1,height=1');
+                    if (popup) {
+                        popup.close();
+                        console.log('🔍 Popup check: NON BLOQUÉE');
+                        return false; // Popup NOT blocked
+                    }
+                    console.log('🔍 Popup check: BLOQUÉE');
+                    return true; // Popup blocked
+                } catch (error) {
+                    console.log('🔍 Popup check: BLOQUÉE (erreur)');
+                    return true; // Popup blocked
                 }
             },
 
@@ -1544,6 +1671,31 @@
                 }
             },
 
+            clearAlerts: function() {
+                const alerts = document.querySelectorAll('.alert');
+                alerts.forEach(alert => alert.classList.remove('show'));
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                AuthManager.init();
+            } catch (error) {
+                console.error('Error initializing Auth page:', error);
+            }
+        });
+
+        window.AuthManager = AuthManager;
+    </script>
+</body>
+</html>add('show');
+                    
+                    setTimeout(() => {
+                        alert.classList.remove('show');
+                    }, 5000);
+                }
+            },
+
             showError: function(message) {
                 this.clearAlerts();
                 const alert = document.getElementById('error-alert');
@@ -1566,29 +1718,4 @@
                 
                 if (alert && text) {
                     text.textContent = message;
-                    alert.classList.add('show');
-                    
-                    setTimeout(() => {
-                        alert.classList.remove('show');
-                    }, 5000);
-                }
-            },
-
-            clearAlerts: function() {
-                const alerts = document.querySelectorAll('.alert');
-                alerts.forEach(alert => alert.classList.remove('show'));
-            }
-        };
-
-        document.addEventListener('DOMContentLoaded', function() {
-            try {
-                AuthManager.init();
-            } catch (error) {
-                console.error('Error initializing Auth page:', error);
-            }
-        });
-
-        window.AuthManager = AuthManager;
-    </script>
-</body>
-</html>
+                    alert.classList.

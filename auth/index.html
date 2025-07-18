@@ -961,6 +961,22 @@
                 try {
                     await window.FirebaseManager.initialize();
                     
+                    // 🔧 FIX CRITIQUE: Vérifier les redirects au démarrage
+                    const firebase = await window.FirebaseManager.initialize();
+                    if (firebase && firebase.getRedirectResult) {
+                        try {
+                            const result = await firebase.getRedirectResult(firebase.auth);
+                            if (result && result.user) {
+                                console.log('✅ Redirect authentification réussie:', result.user.email);
+                                // L'auth state change va gérer la suite
+                                return;
+                            }
+                        } catch (redirectError) {
+                            console.error('❌ Erreur redirect result:', redirectError);
+                            this.handleAuthError(redirectError, 'Authentication redirect failed');
+                        }
+                    }
+                    
                     window.FirebaseManager.onAuthStateChanged((user, userData) => {
                         this.currentUser = user;
                         
@@ -970,6 +986,7 @@
                             this.currentUser = null;
                         }
                     });
+                    
                 } catch (error) {
                     console.error('Error setupFirebaseManager:', error);
                     this.showError('Firebase initialization failed');
@@ -1011,6 +1028,7 @@
                 }
             },
 
+            // 🔧 FIX CRITIQUE: Authentification Google avec fallback redirect
             signInWithGoogle: async function() {
                 if (this.isLoading || this.isBlocked()) return;
                 
@@ -1020,7 +1038,19 @@
                     const firebase = await window.FirebaseManager.initialize();
                     if (!firebase) throw new Error('Firebase not available');
                     
-                    await firebase.signInWithPopup(firebase.auth, firebase.googleProvider);
+                    // 🔧 FIX: Meilleure gestion des popups avec fallback redirect
+                    try {
+                        await firebase.signInWithPopup(firebase.auth, firebase.googleProvider);
+                    } catch (popupError) {
+                        console.log('🔄 Popup bloqué, utilisation redirect...', popupError.code);
+                        if (popupError.code === 'auth/popup-blocked' || 
+                            popupError.code === 'auth/popup-closed-by-user') {
+                            // Fallback vers redirect si popup bloqué
+                            await firebase.signInWithRedirect(firebase.auth, firebase.googleProvider);
+                            return; // Ne pas faire setLoading(false) car redirect en cours
+                        }
+                        throw popupError;
+                    }
                 } catch (error) {
                     console.error('Error Google sign-in:', error);
                     this.setLoading(false);
@@ -1028,6 +1058,7 @@
                 }
             },
 
+            // 🔧 FIX CRITIQUE: Authentification Facebook avec fallback redirect
             signInWithFacebook: async function() {
                 if (this.isLoading || this.isBlocked()) return;
                 
@@ -1037,7 +1068,19 @@
                     const firebase = await window.FirebaseManager.initialize();
                     if (!firebase) throw new Error('Firebase not available');
                     
-                    await firebase.signInWithPopup(firebase.auth, firebase.facebookProvider);
+                    // 🔧 FIX: Meilleure gestion des popups avec fallback redirect
+                    try {
+                        await firebase.signInWithPopup(firebase.auth, firebase.facebookProvider);
+                    } catch (popupError) {
+                        console.log('🔄 Popup bloqué, utilisation redirect...', popupError.code);
+                        if (popupError.code === 'auth/popup-blocked' || 
+                            popupError.code === 'auth/popup-closed-by-user') {
+                            // Fallback vers redirect si popup bloqué
+                            await firebase.signInWithRedirect(firebase.auth, firebase.facebookProvider);
+                            return; // Ne pas faire setLoading(false) car redirect en cours
+                        }
+                        throw popupError;
+                    }
                 } catch (error) {
                     console.error('Error Facebook sign-in:', error);
                     this.setLoading(false);

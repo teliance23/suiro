@@ -174,7 +174,7 @@
                 
                 // 🔧 FIX CRITIQUE: Configuration Firebase avec optimisations CSP
                 const firebaseConfig = {
-                    apiKey: "AIzaSyD-0wrtBrV-RyZVtjz6cZgumvsoRIJ07bY",
+                    apiKey: "AIzaSyD-0wrtBrV-RyZVtjz6cZgumvsoRIJ07b",
                     authDomain: "suirodoku-web.firebaseapp.com",
                     projectId: "suirodoku-web",
                     storageBucket: "suirodoku-web.firebasestorage.app",

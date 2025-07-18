@@ -1,6 +1,6 @@
-// ============= SHARED/FIREBASE-MANAGER.JS - SINGLETON CENTRALISÉ =============
+// ============= SHARED/FIREBASE-MANAGER.JS - SINGLETON CENTRALISÉ CORRIGÉ =============
 // Solution complète pour éliminer les race conditions et unifier Firebase
-// VERSION FINALE CORRIGÉE avec signInWithRedirect et getRedirectResult + FIX uid + CSP OPTIMISÉ
+// VERSION FINALE CORRIGÉE avec signInWithRedirect et getRedirectResult + FIX uid + CSP OPTIMISÉ + COOP
 
 (function() {
     'use strict';
@@ -111,9 +111,9 @@
             
             // Configuration unifiée (Fix Bug #2 - Timeouts cohérents)
             this.config = {
-                timeout: 5000,        // UNIFIÉ : 5 secondes pour tous
-                maxRetries: 5,
-                retryDelay: 500,
+                timeout: 8000,        // UNIFIÉ : 8 secondes pour tous (plus sûr)
+                maxRetries: 3,        // Réduit à 3 pour éviter les boucles
+                retryDelay: 1000,     // 1 seconde entre retries
                 enableDebug: false
             };
             
@@ -174,7 +174,7 @@
                 
                 // 🔧 FIX CRITIQUE: Configuration Firebase avec optimisations CSP
                 const firebaseConfig = {
-                    apiKey: "AIzaSyD-0wrtBrV-RyZVtjz6cZgumvsoRIJ07b",
+                    apiKey: "AIzaSyD-0wrtBrV-RyZVtjz6cZgumvsoRIJ07bY",
                     authDomain: "suirodoku-web.firebaseapp.com",
                     projectId: "suirodoku-web",
                     storageBucket: "suirodoku-web.firebasestorage.app",
@@ -191,7 +191,7 @@
                     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js')
                 ];
                 
-                // Timeout unifié
+                // Timeout unifié plus long pour plus de stabilité
                 const timeoutPromise = new Promise((_, reject) => 
                     setTimeout(() => reject(new Error('Firebase timeout')), this.config.timeout)
                 );
@@ -210,47 +210,62 @@
 
                 // Initialiser Firebase avec settings optimisés pour CSP
                 this.app = initializeApp(firebaseConfig);
+                
+                // 🔧 FIX CRITIQUE: Simplification Auth pour éviter les erreurs
+                console.log('🔧 Configuration Auth simplifiée et robuste...');
                 this.auth = getAuth(this.app);
+                console.log('✅ Auth initialisé avec configuration standard');
+                
                 this.db = getFirestore(this.app);
                 this.storage = getStorage(this.app);
 
-                // 🔧 FIX CRITIQUE: Configuration Firestore pour réduire les appels cleardot.gif
+                // 🔧 FIX CRITIQUE: Configuration Firestore optionnelle
                 try {
-                    // Désactiver le mode expérimental qui utilise cleardot.gif
-                    if (typeof this.db._delegate?.settings === 'function') {
+                    // Tentative de configuration avancée Firestore
+                    if (this.db._delegate?.settings) {
                         this.db._delegate.settings({
                             experimentalForceLongPolling: false,
-                            experimentalAutoDetectLongPolling: true
+                            experimentalAutoDetectLongPolling: false,
+                            ssl: true,
+                            cacheSizeBytes: 10485760, // 10MB cache
                         });
+                        console.log('✅ Firestore configuré avec settings avancés');
+                    } else {
+                        console.log('ℹ️ Firestore utilise la configuration par défaut');
                     }
-                    console.log('✅ Firestore configuré pour optimiser CSP');
                 } catch (error) {
-                    console.warn('⚠️ Impossible de configurer les settings Firestore:', error);
+                    console.warn('⚠️ Settings Firestore non appliqués (pas critique):', error.code);
                 }
 
-                // Configuration des providers avec optimisations
-                const googleProvider = new GoogleAuthProvider();
-                const facebookProvider = new FacebookAuthProvider();
+                // Configuration des providers avec gestion d'erreur et optimisation COOP
+                let googleProvider = null;
+                let facebookProvider = null;
                 
                 try {
+                    googleProvider = new GoogleAuthProvider();
                     googleProvider.addScope('email');
                     googleProvider.addScope('profile');
+                    // 🔧 FIX COOP: Configuration optimisée pour les redirects
                     googleProvider.setCustomParameters({ 
                         prompt: 'select_account',
-                        // 🔧 FIX: Optimisations pour éviter certaines erreurs CSP
-                        hd: undefined  // Évite certains appels supplémentaires
+                        // Paramètres optimisés pour Firebase Hosting et COOP
+                        redirect_uri: window.location.origin + window.location.pathname
                     });
+                    console.log('✅ Google Provider configuré (optimisé COOP)');
                 } catch (error) {
                     console.warn('⚠️ Erreur configuration Google Provider:', error);
                 }
                 
                 try {
+                    facebookProvider = new FacebookAuthProvider();
                     facebookProvider.addScope('public_profile');
+                    facebookProvider.addScope('email');
+                    // 🔧 FIX COOP: Configuration optimisée pour les redirects
                     facebookProvider.setCustomParameters({ 
-                        display: 'popup',
-                        // 🔧 FIX: Paramètres optimisés Facebook
+                        display: 'page', // Utiliser 'page' au lieu de 'popup' pour les redirects
                         auth_type: 'rerequest'
                     });
+                    console.log('✅ Facebook Provider configuré (optimisé COOP)');
                 } catch (error) {
                     console.warn('⚠️ Erreur configuration Facebook Provider:', error);
                 }
@@ -306,7 +321,7 @@
                 this.isLoading = false;
                 this.retryCount = 0;
                 
-                console.log('✅ Firebase Manager initialisé avec succès ! (avec signInWithRedirect et getRedirectResult + optimisations CSP)');
+                console.log('✅ Firebase Manager initialisé avec succès !');
                 return this.firebaseAuth;
                 
             } catch (error) {
@@ -316,7 +331,7 @@
                 this.hasError = true;
                 this.initPromise = null; // Reset pour retry
                 
-                // Retry automatique
+                // Retry automatique avec limite
                 if (this.retryCount < this.config.maxRetries) {
                     this.retryCount++;
                     console.log(`🔄 Retry ${this.retryCount}/${this.config.maxRetries} dans ${this.config.retryDelay}ms...`);
@@ -339,6 +354,9 @@
         _setupAuthStateListener() {
             const { onAuthStateChanged } = this.firebaseAuth;
             
+            // 🔧 FIX CRITIQUE: Vérification redirect simplifiée et sécurisée
+            this._checkRedirectResult();
+            
             onAuthStateChanged(this.auth, async (user) => {
                 console.log('🔥 Auth state change détecté:', user ? user.email : 'déconnecté');
                 
@@ -355,6 +373,66 @@
                 // Notifier tous les composants
                 this._notifyAuthCallbacks(user, this.userData);
             });
+        }
+
+        /**
+         * Vérifie le résultat d'une redirection OAuth de façon sécurisée
+         * @private
+         */
+        async _checkRedirectResult() {
+            try {
+                if (!this.firebaseAuth?.getRedirectResult) return;
+                
+                // 🔧 FIX COOP: Ajouter un délai pour laisser la page se stabiliser après redirect
+                await this._delay(100);
+                
+                const result = await this.firebaseAuth.getRedirectResult(this.auth);
+                if (result && result.user) {
+                    console.log('✅ Redirection authentification réussie:', result.user.email);
+                    // Nettoyer l'URL si elle contient des paramètres OAuth
+                    this._cleanOAuthURL();
+                } else {
+                    console.log('ℹ️ Aucune redirection OAuth en attente');
+                }
+            } catch (error) {
+                // Les erreurs de redirect sont normales s'il n'y a pas de redirection en cours
+                if (error.code === 'auth/argument-error' || 
+                    error.code === 'auth/no-auth-event' ||
+                    error.code === 'auth/operation-not-allowed') {
+                    console.log('ℹ️ Aucune redirection OAuth en cours (normal)');
+                } else {
+                    console.warn('⚠️ Erreur vérification redirect (non critique):', error.code);
+                }
+            }
+        }
+
+        /**
+         * Nettoie l'URL des paramètres OAuth après une redirection réussie
+         * @private
+         */
+        _cleanOAuthURL() {
+            try {
+                const url = new URL(window.location.href);
+                let hasOAuthParams = false;
+                
+                // Paramètres OAuth courants à nettoyer
+                const oauthParams = ['code', 'state', 'scope', 'authuser', 'prompt'];
+                
+                oauthParams.forEach(param => {
+                    if (url.searchParams.has(param)) {
+                        url.searchParams.delete(param);
+                        hasOAuthParams = true;
+                    }
+                });
+                
+                // Mettre à jour l'URL si nécessaire
+                if (hasOAuthParams) {
+                    window.history.replaceState({}, document.title, url.pathname + url.search);
+                    console.log('🧹 URL nettoyée des paramètres OAuth');
+                }
+            } catch (error) {
+                console.warn('⚠️ Erreur nettoyage URL (non critique):', error);
+            }
         }
 
         /**
@@ -552,6 +630,92 @@
         _clearUserCache() {
             this.userDataCache.clear();
             console.log('🗑️ Cache utilisateur vidé');
+        }
+
+        // ============= MÉTHODES D'AUTHENTIFICATION SÉCURISÉES =============
+
+        /**
+         * Authentification Google - Force le redirect pour éviter les problèmes COOP
+         */
+        async signInWithGoogle() {
+            try {
+                if (!this.firebaseAuth?.googleProvider) {
+                    throw new Error('Google Provider non disponible');
+                }
+
+                console.log('🔐 Connexion Google via redirect (optimisé COOP)...');
+                
+                // 🔧 FIX COOP: Utiliser directement redirect pour éviter les erreurs de politique
+                await this.firebaseAuth.signInWithRedirect(this.auth, this.firebaseAuth.googleProvider);
+                // Note: cette méthode redirige la page, donc pas de return
+                
+            } catch (error) {
+                console.error('❌ Erreur Google sign-in:', error);
+                throw error;
+            }
+        }
+
+        /**
+         * Authentification Facebook - Force le redirect pour éviter les problèmes COOP
+         */
+        async signInWithFacebook() {
+            try {
+                if (!this.firebaseAuth?.facebookProvider) {
+                    throw new Error('Facebook Provider non disponible');
+                }
+
+                console.log('🔐 Connexion Facebook via redirect (optimisé COOP)...');
+                
+                // 🔧 FIX COOP: Utiliser directement redirect pour éviter les erreurs de politique
+                await this.firebaseAuth.signInWithRedirect(this.auth, this.firebaseAuth.facebookProvider);
+                // Note: cette méthode redirige la page, donc pas de return
+                
+            } catch (error) {
+                console.error('❌ Erreur Facebook sign-in:', error);
+                throw error;
+            }
+        }
+
+        /**
+         * Méthode alternative pour popup (si besoin dans des contextes spéciaux)
+         */
+        async signInWithGooglePopup() {
+            try {
+                if (!this.firebaseAuth?.googleProvider) {
+                    throw new Error('Google Provider non disponible');
+                }
+
+                console.log('🔐 Tentative connexion Google (popup)...');
+                const result = await this.firebaseAuth.signInWithPopup(this.auth, this.firebaseAuth.googleProvider);
+                console.log('✅ Connexion Google réussie (popup)');
+                return result;
+                
+            } catch (error) {
+                console.warn('⚠️ Popup Google bloqué par COOP:', error.code);
+                // Fallback automatique vers redirect
+                return this.signInWithGoogle();
+            }
+        }
+
+        /**
+         * Méthode alternative pour popup Facebook (si besoin dans des contextes spéciaux)
+         */
+        async signInWithFacebookPopup() {
+            try {
+                if (!this.firebaseAuth?.facebookProvider) {
+                    throw new Error('Facebook Provider non disponible');
+                }
+
+                console.log('🔐 Tentative connexion Facebook (popup)...');
+                const result = await this.firebaseAuth.signInWithPopup(this.auth, this.firebaseAuth.facebookProvider);
+                console.log('✅ Connexion Facebook réussie (popup)');
+                return result;
+                
+            } catch (error) {
+                console.warn('⚠️ Popup Facebook bloqué par COOP:', error.code);
+                // Fallback automatique vers redirect
+                return this.signInWithFacebook();
+            }
         }
 
         // ============= MÉTHODES PUBLIQUES =============
@@ -883,6 +1047,6 @@
         console.log('  - window.firebaseManagerStats() pour stats cache');
     }
 
-    console.log('🔥 Firebase Manager Singleton ready - signInWithRedirect, getRedirectResult, FIX uid et optimisations CSP inclus ✅');
+    console.log('🔥 Firebase Manager Singleton ready - Optimisé et stable ✅');
 
 })();

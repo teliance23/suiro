@@ -1,6 +1,10 @@
+// ============= SHARED/AUTH-HEADER.JS V2 - THREAD-SAFE AVEC FIREBASE MANAGER V2 =============
+
 (function() {
     'use strict';
 
+    // ============= CSS INJECTION POUR HEADER AUTH =============
+    
     function injectHeaderCSS() {
         if (document.getElementById('auth-header-styles')) return;
 
@@ -226,10 +230,10 @@
                 border: 2px solid #e5e5ea;
                 border-top: 2px solid #8e8e93;
                 border-radius: 50%;
-                animation: spin 1s linear infinite;
+                animation: auth-spin 1s linear infinite;
             }
 
-            @keyframes spin {
+            @keyframes auth-spin {
                 0% { transform: rotate(0deg); }
                 100% { transform: rotate(360deg); }
             }
@@ -243,10 +247,10 @@
                 background: #ff9500;
                 border: 2px solid white;
                 border-radius: 50%;
-                animation: pulse 2s infinite;
+                animation: auth-pulse 2s infinite;
             }
 
-            @keyframes pulse {
+            @keyframes auth-pulse {
                 0% { box-shadow: 0 0 0 0 rgba(255, 149, 0, 0.7); }
                 70% { box-shadow: 0 0 0 10px rgba(255, 149, 0, 0); }
                 100% { box-shadow: 0 0 0 0 rgba(255, 149, 0, 0); }
@@ -309,123 +313,120 @@
         document.head.appendChild(style);
     }
 
+    // ============= AUTH HEADER STATE MANAGEMENT =============
+
     const AuthHeaderState = {
         currentUser: null,
         userData: null,
-        authState: 'initializing',
-        updateInProgress: false,
-        authUnsubscribe: null,
-        isLoading: false,
+        firebaseManager: null,
+        authState: 'uninitialized',
         isInitialized: false,
-        hasError: false
+        authUnsubscribe: null,
+        lastUpdate: null,
+        retryCount: 0,
+        maxRetries: 3
     };
 
-    window.AuthHeader = {
-        authState: 'initializing',
-        updateInProgress: false,
-        authUnsubscribe: null,
-        
-        init: function() {
+    // ============= AUTH HEADER MANAGER CLASS =============
+
+    class AuthHeaderManager {
+        constructor() {
+            this.state = AuthHeaderState;
+        }
+
+        // ============= INITIALIZATION THREAD-SAFE =============
+
+        async init() {
             try {
                 injectHeaderCSS();
                 this.showLoadingState();
-                this.setupFirebaseManager();
-                AuthHeaderState.isInitialized = true;
+                await this.setupFirebaseManagerV2();
+                this.state.isInitialized = true;
+                console.log('✅ AuthHeader V2 initialized with FirebaseManager V2');
             } catch (error) {
-                console.error('Error initializing AuthHeader:', error);
+                console.error('❌ Error initializing AuthHeader V2:', error);
                 this.showErrorState('Initialization failed');
             }
-        },
+        }
 
-        setupFirebaseManager: async function() {
+        // ✅ NOUVEAU PATTERN - Utilise getInstance() thread-safe
+        async setupFirebaseManagerV2() {
             try {
-                await window.FirebaseManager.initialize();
+                // ✅ Utiliser la nouvelle API thread-safe
+                this.state.firebaseManager = await window.FirebaseManager.getInstance();
                 
-                const unsubscribe = window.FirebaseManager.onAuthStateChanged(
+                // ✅ Attendre que Firebase soit prêt avec waitForAuthReady()
+                await this.state.firebaseManager.waitForAuthReady();
+                
+                // ✅ Utiliser la nouvelle API de callbacks
+                this.state.authUnsubscribe = this.state.firebaseManager.onAuthStateChanged(
                     async (user, userData, error) => {
                         await this.handleAuthStateChangeSafely(user, userData, error);
                     }
                 );
                 
-                this.authUnsubscribe = unsubscribe;
+                console.log('✅ Firebase Manager V2 setup completed');
                 
             } catch (error) {
-                console.error('Error setupFirebaseManager:', error);
-                this.showErrorState('Connection failed');
+                console.error('❌ Error setupFirebaseManagerV2:', error);
+                await this.handleRetryLogic(error);
             }
-        },
-        
-        async handleAuthStateChangeSafely(user, userData, error) {
-            if (this.updateInProgress) {
-                console.log('🔒 Auth header update en cours, skipping...');
-                return;
-            }
-            
-            this.updateInProgress = true;
-            
-            try {
-                if (error) {
-                    console.error('❌ Erreur auth state:', error);
-                    this.showErrorState('Authentication error');
-                    return;
-                }
-                
-                if (user) {
-                    const validatedUserData = this.validateUserData(user, userData);
-                    await this.updateAuthenticatedUISafely(validatedUserData);
-                } else {
-                    this.showNotAuthenticatedState();
-                }
-                
-                this.syncWithMobileMenuSafely(userData || user);
-                
-                this.authState = 'ready';
-                
-            } catch (error) {
-                console.error('❌ Erreur handleAuthStateChangeSafely:', error);
-                this.showErrorState('UI update failed');
-            } finally {
-                this.updateInProgress = false;
-            }
-        },
-        
-        validateUserData: function(user, userData) {
-            if (!user) {
-                throw new Error('User object is required');
-            }
-            
-            const validUserData = userData || user;
-            
-            const validatedData = {
-                uid: user.uid,
-                email: user.email,
-                displayName: validUserData.displayName || user.displayName || 'Anonymous',
-                photoURL: validUserData.photoURL || user.photoURL,
-                profile: validUserData.profile || {
-                    isProfileComplete: true,
-                    displayPreference: 'realname',
-                    nationality: null
-                },
-                privacy: validUserData.privacy || {
-                    profileVisibility: 'public',
-                    showInLeaderboards: true
-                }
-            };
-            
-            return validatedData;
-        },
+        }
 
+        // ✅ NOUVEAU PATTERN - Thread-safe avec operation queue
+        async handleAuthStateChangeSafely(user, userData, error) {
+            try {
+                // ✅ Utiliser operationQueue.enqueue() au lieu de updateInProgress
+                return this.state.firebaseManager.operationQueue.enqueue(async () => {
+                    this.state.lastUpdate = Date.now();
+                    
+                    if (error) {
+                        console.error('❌ Auth state error:', error);
+                        this.showErrorState('Authentication error');
+                        return;
+                    }
+                    
+                    if (user) {
+                        // ✅ Utiliser getUserData() avec options au lieu d'accès direct
+                        const validatedData = await this.state.firebaseManager.getUserData(user, {
+                            useCache: false,
+                            validatePermissions: false,
+                            includeProfile: true,
+                            includeStats: false
+                        });
+                        
+                        await this.updateAuthenticatedUISafely(validatedData);
+                    } else {
+                        this.showNotAuthenticatedState();
+                    }
+                    
+                    // ✅ Synchronisation thread-safe avec MobileMenu
+                    this.syncWithMobileMenuSafely(userData || user);
+                    
+                    this.state.authState = 'ready';
+                    this.state.retryCount = 0; // Reset retry count on success
+                });
+                
+            } catch (error) {
+                console.error('❌ Error handleAuthStateChangeSafely:', error);
+                this.showErrorState('UI update failed');
+                await this.handleRetryLogic(error);
+            }
+        }
+
+        // ✅ NOUVEAU PATTERN - Thread-safe UI update
         async updateAuthenticatedUISafely(userData) {
             try {
                 const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
                 if (!desktopAuthButtons) {
-                    console.warn('Element desktop-auth-buttons not found');
+                    console.warn('⚠️ Element desktop-auth-buttons not found');
                     return;
                 }
                 
-                const displayName = this.getDisplayNameSafely(userData);
-                const flag = this.getFlagEmojiSafely(userData.profile?.nationality);
-                const isProfileComplete = this.isProfileCompleteSafely(userData);
+                // ✅ Utiliser les méthodes thread-safe du FirebaseManager
+                const displayName = this.state.firebaseManager.getDisplayName(userData);
+                const flag = this.state.firebaseManager.getFlagEmoji(userData.profile?.nationality);
+                const isProfileComplete = this.state.firebaseManager.isProfileComplete(userData);
                 
                 const profileBadge = !isProfileComplete ? 
                     '<div class="profile-incomplete-badge" title="Complete your profile"></div>' : '';
@@ -435,48 +436,21 @@
                 
                 this.setupDropdownAccessibility();
                 
+                // ✅ Mise à jour des state variables thread-safe
+                this.state.currentUser = userData;
+                this.state.userData = userData;
+                
+                console.log('✅ Auth UI updated successfully');
+                
             } catch (error) {
-                console.error('❌ Erreur updateAuthenticatedUISafely:', error);
+                console.error('❌ Error updateAuthenticatedUISafely:', error);
                 this.showNotAuthenticatedState();
             }
-        },
-        
-        getDisplayNameSafely: function(userData) {
-            try {
-                if (window.FirebaseManager && window.FirebaseManager.getDisplayName) {
-                    return window.FirebaseManager.getDisplayName(userData);
-                }
-                
-                return userData?.displayName || userData?.email?.split('@')[0] || 'Anonymous';
-            } catch (error) {
-                console.warn('⚠️ Erreur getDisplayNameSafely:', error);
-                return 'Anonymous';
-            }
-        },
-        
-        getFlagEmojiSafely: function(nationality) {
-            try {
-                if (window.FirebaseManager && window.FirebaseManager.getFlagEmoji) {
-                    return window.FirebaseManager.getFlagEmoji(nationality);
-                }
-                return nationality ? '🌍' : '';
-            } catch (error) {
-                return '';
-            }
-        },
-        
-        isProfileCompleteSafely: function(userData) {
-            try {
-                if (window.FirebaseManager && window.FirebaseManager.isProfileComplete) {
-                    return window.FirebaseManager.isProfileComplete(userData);
-                }
-                return userData?.profile?.isProfileComplete === true;
-            } catch (error) {
-                return true;
-            }
-        },
-        
-        createAuthUITemplate: function(displayName, flag, profileBadge) {
+        }
+
+        // ============= UI TEMPLATE CREATION =============
+
+        createAuthUITemplate(displayName, flag, profileBadge) {
             const escapeHtml = (str) => {
                 const div = document.createElement('div');
                 div.textContent = str;
@@ -505,60 +479,42 @@
                             <span class="dropdown-icon">⚙️</span>
                             <span>Settings</span>
                         </a>
-                        <a href="#" class="sign-out" onclick="event.preventDefault(); AuthHeader.signOut();" role="menuitem">
+                        <a href="#" class="sign-out" onclick="event.preventDefault(); window.AuthHeader.signOut();" role="menuitem">
                             <span class="dropdown-icon">🚪</span>
                             <span>Sign Out</span>
                         </a>
                     </div>
                 </div>
             `;
-        },
-        
-        getNavigationPathSafely: function(page) {
-            try {
-                if (window.FirebaseManager && window.FirebaseManager.getNavigationPath) {
-                    return window.FirebaseManager.getNavigationPath(page);
-                }
-                return `../${page}/`;
-            } catch (error) {
-                console.warn('⚠️ Navigation path fallback:', error);
-                return '#';
-            }
-        },
-        
-        syncWithMobileMenuSafely: function(userData) {
-            try {
-                if (typeof window.MobileMenu !== 'undefined' && 
-                    typeof window.MobileMenu.syncWithAuthHeader === 'function') {
-                    window.MobileMenu.syncWithAuthHeader(userData);
-                }
-            } catch (error) {
-                console.warn('⚠️ Erreur sync MobileMenu (non critique):', error);
-            }
-        },
+        }
 
-        showNotAuthenticatedState: function() {
+        // ============= STATE MANAGEMENT =============
+
+        showNotAuthenticatedState() {
             try {
                 const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
                 if (!desktopAuthButtons) return;
                 
                 desktopAuthButtons.innerHTML = `
-                    <button class="auth-btn login-btn" onclick="AuthHeader.navigateToAuth()">
+                    <button class="auth-btn login-btn" onclick="window.AuthHeader.navigateToAuth()">
                         <span>Log In</span>
                     </button>
                 `;
+                
+                this.state.currentUser = null;
+                this.state.userData = null;
+                
             } catch (error) {
-                console.error('Error showNotAuthenticatedState:', error);
+                console.error('❌ Error showNotAuthenticatedState:', error);
             }
-        },
+        }
 
-        showLoadingState: function() {
+        showLoadingState() {
             try {
                 const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
                 if (!desktopAuthButtons) return;
                 
-                AuthHeaderState.isLoading = true;
-                AuthHeaderState.hasError = false;
+                this.state.authState = 'loading';
                 
                 desktopAuthButtons.innerHTML = `
                     <div class="auth-loading">
@@ -567,57 +523,85 @@
                     </div>
                 `;
             } catch (error) {
-                console.error('Error showLoadingState:', error);
+                console.error('❌ Error showLoadingState:', error);
                 this.showNotAuthenticatedState();
             }
-        },
+        }
 
-        showErrorState: function(errorType = 'Error') {
+        showErrorState(errorType = 'Error') {
             try {
                 const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
                 if (!desktopAuthButtons) return;
                 
-                AuthHeaderState.isLoading = false;
-                AuthHeaderState.hasError = true;
+                this.state.authState = 'error';
                 
                 desktopAuthButtons.innerHTML = `
-                    <div class="auth-error" onclick="AuthHeader.retryConnection()" title="Click to retry connection">
+                    <div class="auth-error" onclick="window.AuthHeader.retryConnection()" title="Click to retry connection">
                         <span class="auth-error-icon">⚠️</span>
                         <span>Retry</span>
                     </div>
                 `;
             } catch (error) {
-                console.error('Error showErrorState:', error);
+                console.error('❌ Error showErrorState:', error);
                 this.showNotAuthenticatedState();
             }
-        },
+        }
 
-        retryConnection: function() {
+        // ============= RETRY LOGIC =============
+
+        async handleRetryLogic(error) {
+            if (this.state.retryCount < this.state.maxRetries) {
+                this.state.retryCount++;
+                const delay = Math.min(1000 * Math.pow(2, this.state.retryCount), 10000); // Exponential backoff
+                
+                console.log(`🔄 Retrying AuthHeader operation (${this.state.retryCount}/${this.state.maxRetries}) in ${delay}ms`);
+                
+                setTimeout(async () => {
+                    try {
+                        await this.setupFirebaseManagerV2();
+                    } catch (retryError) {
+                        console.error('❌ Retry failed:', retryError);
+                        if (this.state.retryCount >= this.state.maxRetries) {
+                            this.showErrorState('Max retries reached');
+                        }
+                    }
+                }, delay);
+            } else {
+                console.error('❌ Max retries reached for AuthHeader');
+                this.showErrorState('Connection failed');
+            }
+        }
+
+        async retryConnection() {
             try {
-                AuthHeaderState.hasError = false;
+                this.state.retryCount = 0;
                 this.showLoadingState();
                 
-                window.FirebaseManager.retry().catch(error => {
-                    console.error('Error retry:', error);
-                    this.showErrorState('Retry failed');
-                });
+                // ✅ Utiliser la nouvelle méthode retry() du FirebaseManager
+                await this.state.firebaseManager.retry();
+                
             } catch (error) {
-                console.error('Error retryConnection:', error);
+                console.error('❌ Error retryConnection:', error);
                 this.showErrorState('Retry failed');
             }
-        },
+        }
 
-        signOut: async function() {
+        // ============= USER ACTIONS =============
+
+        async signOut() {
             try {
                 const confirmed = confirm('Are you sure you want to sign out?');
                 if (!confirmed) return false;
 
                 this.showLoadingState();
-                await window.FirebaseManager.signOut();
+                
+                // ✅ Utiliser la méthode thread-safe du FirebaseManager
+                await this.state.firebaseManager.signOut();
+                
                 return true;
                 
             } catch (error) {
-                console.error('Error signOut:', error);
+                console.error('❌ Error signOut:', error);
                 this.showErrorState('Sign out failed');
                 
                 if (typeof window.AuthUtils !== 'undefined' && window.AuthUtils.showError) {
@@ -628,18 +612,42 @@
                 
                 return false;
             }
-        },
+        }
 
-        navigateToAuth: function() {
+        navigateToAuth() {
             try {
-                window.FirebaseManager.navigateTo('auth');
+                // ✅ Utiliser la méthode thread-safe du FirebaseManager
+                this.state.firebaseManager.navigateTo('auth');
             } catch (error) {
-                console.error('Error navigateToAuth:', error);
+                console.error('❌ Error navigateToAuth:', error);
                 window.location.href = '../auth/';
             }
-        },
+        }
 
-        setupDropdownAccessibility: function() {
+        // ============= UTILITY METHODS =============
+
+        getNavigationPathSafely(page) {
+            try {
+                // ✅ Utiliser la méthode thread-safe du FirebaseManager
+                return this.state.firebaseManager.getNavigationPath(page);
+            } catch (error) {
+                console.warn('⚠️ Navigation path fallback:', error);
+                return '#';
+            }
+        }
+
+        syncWithMobileMenuSafely(userData) {
+            try {
+                if (typeof window.MobileMenu !== 'undefined' && 
+                    typeof window.MobileMenu.syncWithAuthHeader === 'function') {
+                    window.MobileMenu.syncWithAuthHeader(userData);
+                }
+            } catch (error) {
+                console.warn('⚠️ MobileMenu sync error (non-critical):', error);
+            }
+        }
+
+        setupDropdownAccessibility() {
             try {
                 const userNameBtn = document.querySelector('.user-name');
                 const dropdownMenu = document.querySelector('.dropdown-menu');
@@ -659,50 +667,101 @@
                     }
                 });
             } catch (error) {
-                console.warn('Error setupDropdownAccessibility:', error);
-            }
-        },
-
-        updateAuthState: async function(user, userData) {
-            if (user) {
-                await this.updateAuthenticatedUISafely(userData || user);
-            } else {
-                this.showNotAuthenticatedState();
-            }
-        },
-
-        getCurrentUser: function() {
-            return AuthHeaderState.currentUser;
-        },
-
-        getCurrentUserData: function() {
-            return AuthHeaderState.userData;
-        },
-
-        isLoading: function() {
-            return AuthHeaderState.isLoading;
-        },
-
-        hasError: function() {
-            return AuthHeaderState.hasError;
-        },
-        
-        cleanup: function() {
-            if (this.authUnsubscribe) {
-                this.authUnsubscribe();
-                this.authUnsubscribe = null;
+                console.warn('⚠️ Error setupDropdownAccessibility:', error);
             }
         }
+
+        // ============= PUBLIC API =============
+
+        async updateAuthState(user, userData) {
+            try {
+                if (user) {
+                    await this.updateAuthenticatedUISafely(userData || user);
+                } else {
+                    this.showNotAuthenticatedState();
+                }
+            } catch (error) {
+                console.error('❌ Error updateAuthState:', error);
+            }
+        }
+
+        getCurrentUser() {
+            return this.state.currentUser;
+        }
+
+        getCurrentUserData() {
+            return this.state.userData;
+        }
+
+        isLoading() {
+            return this.state.authState === 'loading';
+        }
+
+        hasError() {
+            return this.state.authState === 'error';
+        }
+
+        getState() {
+            return {
+                authState: this.state.authState,
+                isInitialized: this.state.isInitialized,
+                currentUser: !!this.state.currentUser,
+                lastUpdate: this.state.lastUpdate,
+                retryCount: this.state.retryCount
+            };
+        }
+
+        // ============= CLEANUP =============
+
+        cleanup() {
+            try {
+                if (this.state.authUnsubscribe) {
+                    this.state.authUnsubscribe();
+                    this.state.authUnsubscribe = null;
+                }
+                
+                this.state.currentUser = null;
+                this.state.userData = null;
+                this.state.isInitialized = false;
+                
+                console.log('🧹 AuthHeader cleanup completed');
+            } catch (error) {
+                console.error('❌ Error during AuthHeader cleanup:', error);
+            }
+        }
+    }
+
+    // ============= GLOBAL EXPOSE =============
+
+    // Créer l'instance globale
+    const authHeaderManager = new AuthHeaderManager();
+
+    window.AuthHeader = {
+        // API publique unifiée
+        init: () => authHeaderManager.init(),
+        updateAuthState: (user, userData) => authHeaderManager.updateAuthState(user, userData),
+        signOut: () => authHeaderManager.signOut(),
+        navigateToAuth: () => authHeaderManager.navigateToAuth(),
+        retryConnection: () => authHeaderManager.retryConnection(),
+        getCurrentUser: () => authHeaderManager.getCurrentUser(),
+        getCurrentUserData: () => authHeaderManager.getCurrentUserData(),
+        isLoading: () => authHeaderManager.isLoading(),
+        hasError: () => authHeaderManager.hasError(),
+        getState: () => authHeaderManager.getState(),
+        cleanup: () => authHeaderManager.cleanup()
     };
 
+    // Aliases pour compatibilité
     window.updateHeaderAuthState = (user, userData) => window.AuthHeader.updateAuthState(user, userData);
     window.signOutUser = () => window.AuthHeader.signOut();
+
+    // ============= AUTO-INITIALIZATION =============
 
     function initAuthHeader() {
         try {
             window.AuthHeader.init();
         } catch (error) {
-            console.error('Error auto-initializing AuthHeader:', error);
+            console.error('❌ Error auto-initializing AuthHeader V2:', error);
         }
     }
 
@@ -711,5 +770,7 @@
     } else {
         initAuthHeader();
     }
+
+    console.log('✅ AuthHeader V2 module loaded - Thread-safe with FirebaseManager V2');
 
 })();

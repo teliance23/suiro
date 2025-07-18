@@ -961,14 +961,12 @@
                 try {
                     await window.FirebaseManager.initialize();
                     
-                    // 🔧 FIX CRITIQUE: Vérifier les redirects au démarrage
                     const firebase = await window.FirebaseManager.initialize();
                     if (firebase && firebase.getRedirectResult) {
                         try {
                             const result = await firebase.getRedirectResult(firebase.auth);
                             if (result && result.user) {
                                 console.log('✅ Redirect authentification réussie:', result.user.email);
-                                // L'auth state change va gérer la suite
                                 return;
                             }
                         } catch (redirectError) {
@@ -995,22 +993,71 @@
 
             handleSuccessfulAuth: async function(userData) {
                 try {
+                    await this.waitForFirebaseReady();
+                    
+                    const validatedData = await this.validateAndCompleteUserData(userData);
+                    
                     if (typeof window.AuthUtils !== 'undefined' && window.AuthUtils.handlePostLogin) {
-                        window.AuthUtils.handlePostLogin(userData, this.redirectAfterLogin);
+                        window.AuthUtils.handlePostLogin(validatedData, this.redirectAfterLogin);
                     } else {
-                        this.handlePostLoginFallback(userData);
+                        await this.handlePostLoginFallback(validatedData);
                     }
+                    
                 } catch (error) {
                     console.error('Error handleSuccessfulAuth:', error);
-                    this.showError('Error processing login');
+                    this.showError('Error processing login. Redirecting...');
+                    
+                    setTimeout(() => {
+                        window.location.href = '../';
+                    }, 2000);
                 }
             },
-
-            handlePostLoginFallback: function(userData) {
+            
+            async waitForFirebaseReady() {
                 try {
-                    const displayName = window.FirebaseManager.getDisplayName(userData);
+                    if (window.FirebaseManager && window.FirebaseManager.waitForAuthReady) {
+                        await window.FirebaseManager.waitForAuthReady();
+                    } else {
+                        await new Promise((resolve) => {
+                            const checkReady = () => {
+                                if (window.FirebaseManager && window.FirebaseManager.isInitialized()) {
+                                    resolve();
+                                } else {
+                                    setTimeout(checkReady, 100);
+                                }
+                            };
+                            checkReady();
+                        });
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Timeout attente Firebase ready:', error);
+                }
+            },
+            
+            async validateAndCompleteUserData(userData) {
+                try {
+                    if (!userData || !userData.uid) {
+                        throw new Error('Invalid user data');
+                    }
                     
-                    // Plus de vérification de profil complet - tous les comptes sont prêts à jouer
+                    if (!userData.profile || !userData.privacy) {
+                        console.log('🔄 Rechargement données utilisateur...');
+                        
+                        const refreshedData = await window.FirebaseManager._getUserDataWithCache(userData);
+                        return refreshedData || userData;
+                    }
+                    
+                    return userData;
+                    
+                } catch (error) {
+                    console.warn('⚠️ Erreur validation userData:', error);
+                    return userData;
+                }
+            },
+            
+            async handlePostLoginFallback(userData) {
+                try {
+                    const displayName = this.getDisplayNameSafely(userData);
                     this.showSuccess(`Welcome, ${displayName}!`);
                     
                     setTimeout(() => {
@@ -1019,16 +1066,27 @@
                         } else {
                             window.location.href = '../';
                         }
-                    }, 1500);
+                    }, 1000);
+                    
                 } catch (error) {
                     console.error('Error handlePostLoginFallback:', error);
                     setTimeout(() => {
                         window.location.href = '../';
-                    }, 1000);
+                    }, 500);
+                }
+            },
+            
+            getDisplayNameSafely(userData) {
+                try {
+                    if (window.FirebaseManager && window.FirebaseManager.getDisplayName) {
+                        return window.FirebaseManager.getDisplayName(userData);
+                    }
+                    return userData?.displayName || userData?.email?.split('@')[0] || 'User';
+                } catch (error) {
+                    return 'User';
                 }
             },
 
-            // 🔧 FIX CRITIQUE: Authentification Google avec fallback redirect
             signInWithGoogle: async function() {
                 if (this.isLoading || this.isBlocked()) return;
                 
@@ -1038,16 +1096,14 @@
                     const firebase = await window.FirebaseManager.initialize();
                     if (!firebase) throw new Error('Firebase not available');
                     
-                    // 🔧 FIX: Meilleure gestion des popups avec fallback redirect
                     try {
                         await firebase.signInWithPopup(firebase.auth, firebase.googleProvider);
                     } catch (popupError) {
                         console.log('🔄 Popup bloqué, utilisation redirect...', popupError.code);
                         if (popupError.code === 'auth/popup-blocked' || 
                             popupError.code === 'auth/popup-closed-by-user') {
-                            // Fallback vers redirect si popup bloqué
                             await firebase.signInWithRedirect(firebase.auth, firebase.googleProvider);
-                            return; // Ne pas faire setLoading(false) car redirect en cours
+                            return;
                         }
                         throw popupError;
                     }
@@ -1058,7 +1114,6 @@
                 }
             },
 
-            // 🔧 FIX CRITIQUE: Authentification Facebook avec fallback redirect
             signInWithFacebook: async function() {
                 if (this.isLoading || this.isBlocked()) return;
                 
@@ -1068,16 +1123,14 @@
                     const firebase = await window.FirebaseManager.initialize();
                     if (!firebase) throw new Error('Firebase not available');
                     
-                    // 🔧 FIX: Meilleure gestion des popups avec fallback redirect
                     try {
                         await firebase.signInWithPopup(firebase.auth, firebase.facebookProvider);
                     } catch (popupError) {
                         console.log('🔄 Popup bloqué, utilisation redirect...', popupError.code);
                         if (popupError.code === 'auth/popup-blocked' || 
                             popupError.code === 'auth/popup-closed-by-user') {
-                            // Fallback vers redirect si popup bloqué
                             await firebase.signInWithRedirect(firebase.auth, firebase.facebookProvider);
-                            return; // Ne pas faire setLoading(false) car redirect en cours
+                            return;
                         }
                         throw popupError;
                     }

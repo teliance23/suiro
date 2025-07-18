@@ -801,48 +801,128 @@
     <script src="../mobile/menu.js"></script>
     
     <script>
+        // ============= PROFILE MANAGER V2 - THREAD-SAFE AVEC FIREBASE MANAGER V2 =============
+        
+        // ✅ NOUVEAU PATTERN - Profile Loading Manager pour éviter les race conditions
+        class ProfileLoadingManager {
+            constructor() {
+                this.loadingPromises = new Map();
+                this.loadingTimeouts = new Map();
+            }
+            
+            async loadProfile(userId) {
+                if (this.loadingPromises.has(userId)) {
+                    console.log('🔄 Profile already loading, returning existing promise');
+                    return this.loadingPromises.get(userId);
+                }
+                
+                const promise = this.doLoadProfile(userId);
+                this.loadingPromises.set(userId, promise);
+                
+                // ✅ Timeout pour éviter les promises qui traînent
+                const timeoutId = setTimeout(() => {
+                    this.loadingPromises.delete(userId);
+                    console.warn('⏰ Profile loading timeout for userId:', userId);
+                }, 15000);
+                
+                this.loadingTimeouts.set(userId, timeoutId);
+                
+                try {
+                    const result = await promise;
+                    return result;
+                } finally {
+                    this.loadingPromises.delete(userId);
+                    const timeout = this.loadingTimeouts.get(userId);
+                    if (timeout) {
+                        clearTimeout(timeout);
+                        this.loadingTimeouts.delete(userId);
+                    }
+                }
+            }
+            
+            async doLoadProfile(userId) {
+                const firebaseManager = await window.FirebaseManager.getInstance();
+                
+                // ✅ NOUVELLE API UNIFIÉE - Remplace toutes les méthodes existantes
+                return firebaseManager.getUserData({ uid: userId }, {
+                    includeProfile: true,
+                    includeStats: true,
+                    useCache: true,
+                    validatePermissions: true
+                });
+            }
+            
+            cleanup() {
+                this.loadingPromises.clear();
+                this.loadingTimeouts.forEach(timeout => clearTimeout(timeout));
+                this.loadingTimeouts.clear();
+            }
+        }
+
         const ProfileManager = {
+            // ============= STATE MANAGEMENT THREAD-SAFE =============
             currentUser: null,
             profileData: null,
             targetUserId: null,
             isOwnProfile: false,
-            isLoading: false,
-            profileCache: new Map(),
+            firebaseManager: null,
+            profileLoadingManager: new ProfileLoadingManager(),
+            retryCount: 0,
+            maxRetries: 3,
+            isInitialized: false,
+            
+            // ============= INITIALIZATION THREAD-SAFE =============
             
             init: function() {
                 try {
-                    this.setupAuthentication();
+                    console.log('👤 Initializing ProfileManager V2...');
+                    
+                    this.setupAuthenticationV2();
                     this.parseURLParameters();
+                    
+                    console.log('✅ ProfileManager V2 initialized with thread-safe patterns');
+                    
                 } catch (error) {
-                    console.error('Error initializing ProfileManager:', error);
+                    console.error('❌ Error initializing ProfileManager V2:', error);
                     this.showError('Failed to initialize profile page');
                 }
             },
 
-            setupAuthentication: function() {
-                const waitForFirebase = () => {
-                    if (typeof window.FirebaseManager !== 'undefined') {
-                        this.initFirebaseAuth();
-                    } else {
-                        setTimeout(waitForFirebase, 100);
+            // ✅ NOUVEAU PATTERN - Utilise getInstance() au lieu d'initialize()
+            setupAuthenticationV2: function() {
+                const waitForFirebaseV2 = async () => {
+                    try {
+                        // ✅ Utiliser la nouvelle API thread-safe
+                        this.firebaseManager = await window.FirebaseManager.getInstance();
+                        await this.initFirebaseAuthV2();
+                    } catch (error) {
+                        console.error('❌ Error waiting for Firebase V2:', error);
+                        await this.handleRetryLogic(error);
                     }
                 };
-                waitForFirebase();
+                waitForFirebaseV2();
             },
 
-            initFirebaseAuth: function() {
+            // ✅ NOUVEAU PATTERN - Thread-safe auth initialization
+            initFirebaseAuthV2: async function() {
                 try {
-                    window.FirebaseManager.onAuthStateChanged((user, userData) => {
+                    // ✅ Utiliser la nouvelle API de callbacks
+                    this.firebaseManager.onAuthStateChanged(async (user, userData) => {
                         this.currentUser = user;
                         
+                        // ✅ Synchronisation thread-safe avec AuthHeader
                         if (typeof window.AuthHeader !== 'undefined' && window.AuthHeader.updateAuthState) {
                             window.AuthHeader.updateAuthState(user, userData);
                         }
                         
-                        this.determineProfileToShow();
+                        await this.determineProfileToShowV2();
                     });
+                    
+                    this.isInitialized = true;
+                    console.log('✅ Firebase Auth V2 setup completed for profile');
+                    
                 } catch (error) {
-                    console.error('Error initFirebaseAuth:', error);
+                    console.error('❌ Error initFirebaseAuthV2:', error);
                     this.showError('Authentication error');
                 }
             },
@@ -860,7 +940,7 @@
                         this.isOwnProfile = true;
                     }
                 } catch (error) {
-                    console.error('Error parseURLParameters:', error);
+                    console.error('❌ Error parseURLParameters:', error);
                     this.targetUserId = null;
                     this.isOwnProfile = true;
                 }
@@ -873,112 +953,78 @@
                 return sanitized;
             },
 
-            determineProfileToShow: function() {
+            // ✅ NOUVEAU PATTERN - Thread-safe profile determination
+            determineProfileToShowV2: async function() {
                 try {
                     if (this.targetUserId) {
                         this.isOwnProfile = this.currentUser && this.currentUser.uid === this.targetUserId;
-                        this.loadPlayerProfile(this.targetUserId);
+                        await this.loadPlayerProfileV2(this.targetUserId);
                     } else if (this.currentUser) {
                         this.targetUserId = this.currentUser.uid;
                         this.isOwnProfile = true;
-                        this.loadPlayerProfile(this.currentUser.uid);
+                        await this.loadPlayerProfileV2(this.currentUser.uid);
                     } else {
                         this.redirectToAuth();
                     }
                 } catch (error) {
-                    console.error('Error determineProfileToShow:', error);
+                    console.error('❌ Error determineProfileToShowV2:', error);
                     this.showError('Error determining profile to display');
                 }
             },
 
-            loadPlayerProfile: async function(userId) {
-                if (this.isLoading) return;
-                
-                this.isLoading = true;
-                
+            // ✅ NOUVELLE MÉTHODE UNIFIÉE - Remplace toutes les méthodes d'accès aux données
+            loadPlayerProfileV2: async function(userId) {
                 try {
-                    document.getElementById('loading-container').classList.add('show');
-                    
-                    if (this.profileCache.has(userId)) {
-                        const cached = this.profileCache.get(userId);
-                        const cacheAge = Date.now() - cached.timestamp;
-                        
-                        if (cacheAge < 5 * 60 * 1000) {
-                            this.handleProfileData(cached.data);
-                            return;
-                        }
-                    }
-                    
-                    const profileData = await this.fetchUserProfile(userId);
+                    // ✅ Utiliser ProfileLoadingManager pour éviter les race conditions
+                    const profileData = await this.profileLoadingManager.loadProfile(userId);
                     
                     if (!profileData) {
                         this.showError('Profile not found');
                         return;
                     }
 
-                    this.profileCache.set(userId, {
-                        data: profileData,
-                        timestamp: Date.now()
-                    });
-
-                    this.handleProfileData(profileData);
+                    await this.handleProfileDataV2(profileData);
                     
                 } catch (error) {
-                    console.error('Error loadPlayerProfile:', error);
-                    this.showError('Failed to load profile');
-                } finally {
-                    this.isLoading = false;
+                    console.error('❌ Error loadPlayerProfileV2:', error);
+                    
+                    if (error.message.includes('Profile is private')) {
+                        this.showPrivateProfile();
+                    } else {
+                        this.showError('Failed to load profile');
+                    }
                 }
             },
 
-            fetchUserProfile: async function(userId) {
-                try {
-                    if (window.AuthUtils && window.AuthUtils.getUserData) {
-                        return await window.AuthUtils.getUserData({ uid: userId });
-                    }
-                    
-                    if (typeof window.getUserData === 'function') {
-                        return await window.getUserData({ uid: userId });
-                    }
-                    
-                    if (window.FirebaseManager && window.FirebaseManager.firebaseAuth && window.FirebaseManager.db) {
-                        const userRef = window.FirebaseManager.firebaseAuth.doc(window.FirebaseManager.db, 'users', userId);
-                        const userDoc = await window.FirebaseManager.firebaseAuth.getDoc(userRef);
-                        
-                        if (userDoc.exists()) {
-                            return { uid: userId, ...userDoc.data() };
-                        }
-                    }
-                    
-                    return null;
-                } catch (error) {
-                    console.error('Error fetchUserProfile:', error);
-                    throw new Error('Failed to fetch user profile');
-                }
-            },
+            // ✅ SUPPRESSION DE LA DUPLICATION - Plus de getUserDataSafely(), fetchUserProfile(), etc.
+            // Toutes remplacées par loadPlayerProfileV2() qui utilise l'API unifiée
 
-            handleProfileData: function(profileData) {
+            // ✅ NOUVEAU PATTERN - Thread-safe profile data handling
+            handleProfileDataV2: async function(profileData) {
                 try {
                     this.profileData = profileData;
 
-                    if (!this.isOwnProfile && profileData.privacy?.profileVisibility === 'private') {
-                        this.showPrivateProfile();
-                        return;
-                    }
+                    // ✅ Cache unifié - les données sont déjà mises en cache par FirebaseManager
+                    // Plus besoin de cache local séparé
 
-                    this.displayProfile(profileData);
+                    this.displayProfileV2(profileData);
                     
                     document.getElementById('loading-container').classList.remove('show');
                     document.getElementById('profile-content').style.display = 'block';
+                    
+                    console.log('✅ Profile data handled successfully');
+                    
                 } catch (error) {
-                    console.error('Error handleProfileData:', error);
+                    console.error('❌ Error handleProfileDataV2:', error);
                     this.showError('Error displaying profile');
                 }
             },
 
-            displayProfile: function(userData) {
+            // ✅ NOUVELLE MÉTHODE - Thread-safe profile display
+            displayProfileV2: function(userData) {
                 try {
-                    const displayName = window.FirebaseManager.getDisplayName(userData);
+                    // ✅ Utiliser les méthodes thread-safe du FirebaseManager
+                    const displayName = this.firebaseManager.getDisplayName(userData);
                     const avatarInitial = displayName.charAt(0).toUpperCase();
                     
                     // Profile Avatar
@@ -995,7 +1041,7 @@
                     // Profile Flag
                     const flagElement = document.getElementById('profile-flag');
                     if (userData.profile?.nationality) {
-                        const flagEmoji = window.FirebaseManager.getFlagEmoji(userData.profile.nationality);
+                        const flagEmoji = this.firebaseManager.getFlagEmoji(userData.profile.nationality);
                         flagElement.textContent = flagEmoji;
                         flagElement.style.display = 'inline';
                     } else {
@@ -1003,29 +1049,29 @@
                     }
 
                     // Player Level
-                    const level = this.getPlayerLevel(userData.improvedStats?.ranked?.currentRating || 1000);
+                    const level = this.getPlayerLevelV2(userData.improvedStats?.ranked?.currentRating || 1000);
                     const levelElement = document.getElementById('profile-level');
                     levelElement.textContent = level.name;
                     levelElement.style.background = level.color;
 
                     // Join Date
-                    this.displayJoinDate(userData);
+                    this.displayJoinDateV2(userData);
                     
                     // Profile Actions
-                    this.displayProfileActions();
+                    this.displayProfileActionsV2();
                     
-                    // Stats
-                    this.displayStats(userData.improvedStats || {});
+                    // Stats - utilisation des improvedStats
+                    this.displayStatsV2(userData.improvedStats || {});
                     
                     // Best Scores
-                    this.displayBestScores(userData.improvedStats || {});
+                    this.displayBestScoresV2(userData.improvedStats || {});
                     
                 } catch (error) {
-                    console.error('Error displayProfile:', error);
+                    console.error('❌ Error displayProfileV2:', error);
                 }
             },
 
-            displayJoinDate: function(userData) {
+            displayJoinDateV2: function(userData) {
                 try {
                     const joinDateElement = document.getElementById('profile-join-date');
                     const joinDate = userData.profile?.joinDate || userData.createdAt;
@@ -1041,12 +1087,12 @@
                         joinDateElement.textContent = 'Member since unknown';
                     }
                 } catch (error) {
-                    console.error('Error displayJoinDate:', error);
+                    console.error('❌ Error displayJoinDateV2:', error);
                     document.getElementById('profile-join-date').textContent = 'Member since unknown';
                 }
             },
 
-            displayProfileActions: function() {
+            displayProfileActionsV2: function() {
                 try {
                     const actionsContainer = document.getElementById('profile-actions');
                     
@@ -1070,11 +1116,12 @@
                         `;
                     }
                 } catch (error) {
-                    console.error('Error displayProfileActions:', error);
+                    console.error('❌ Error displayProfileActionsV2:', error);
                 }
             },
 
-            displayStats: function(improvedStats) {
+            // ✅ NOUVEAU PATTERN - Utilise improvedStats au lieu de stats
+            displayStatsV2: function(improvedStats) {
                 try {
                     const stats = improvedStats || {};
                     const practice = stats.practice || {};
@@ -1108,13 +1155,13 @@
                     document.getElementById('current-rating').textContent = ranked.currentRating || 1000;
                     
                     // Last played
-                    this.displayLastPlayed(stats.lastPlayed);
+                    this.displayLastPlayedV2(stats.lastPlayed);
                 } catch (error) {
-                    console.error('Error displayStats:', error);
+                    console.error('❌ Error displayStatsV2:', error);
                 }
             },
 
-            displayLastPlayed: function(lastPlayed) {
+            displayLastPlayedV2: function(lastPlayed) {
                 try {
                     const lastPlayedElement = document.getElementById('last-played');
                     
@@ -1125,12 +1172,13 @@
                         lastPlayedElement.textContent = 'Never';
                     }
                 } catch (error) {
-                    console.error('Error displayLastPlayed:', error);
+                    console.error('❌ Error displayLastPlayedV2:', error);
                     document.getElementById('last-played').textContent = 'Unknown';
                 }
             },
 
-            displayBestScores: function(improvedStats) {
+            // ✅ NOUVEAU PATTERN - Utilise improvedStats.practice.bestScores
+            displayBestScoresV2: function(improvedStats) {
                 try {
                     const bestScores = improvedStats?.practice?.bestScores || {};
                     const difficulties = ['easy', 'medium', 'hard', 'expert', 'master'];
@@ -1148,7 +1196,32 @@
                         }
                     });
                 } catch (error) {
-                    console.error('Error displayBestScores:', error);
+                    console.error('❌ Error displayBestScoresV2:', error);
+                }
+            },
+
+            // ============= ERROR HANDLING ET RETRY LOGIC =============
+
+            async handleRetryLogic(error) {
+                if (this.retryCount < this.maxRetries) {
+                    this.retryCount++;
+                    const delay = Math.min(1000 * Math.pow(2, this.retryCount), 10000);
+                    
+                    console.log(`🔄 Retrying ProfileManager operation (${this.retryCount}/${this.maxRetries}) in ${delay}ms`);
+                    
+                    setTimeout(async () => {
+                        try {
+                            await this.setupAuthenticationV2();
+                        } catch (retryError) {
+                            console.error('❌ Retry failed:', retryError);
+                            if (this.retryCount >= this.maxRetries) {
+                                this.showError('Max retries reached');
+                            }
+                        }
+                    }, delay);
+                } else {
+                    console.error('❌ Max retries reached for ProfileManager');
+                    this.showError('Connection failed');
                 }
             },
 
@@ -1178,7 +1251,7 @@
                         window.navigateTo('leaderboard');
                     }
                 } catch (error) {
-                    console.error('Error goBack:', error);
+                    console.error('❌ Error goBack:', error);
                     window.navigateTo('leaderboard');
                 }
             },
@@ -1199,7 +1272,9 @@
                 }, 1000);
             },
 
-            getPlayerLevel: function(rating) {
+            // ============= UTILITY METHODS =============
+
+            getPlayerLevelV2: function(rating) {
                 if (rating < 1000) return { name: 'Beginner', color: 'linear-gradient(135deg, #8e8e93, #6d6d70)' };
                 if (rating < 1400) return { name: 'Intermediate', color: 'linear-gradient(135deg, #007aff, #0056b3)' };
                 if (rating < 1800) return { name: 'Advanced', color: 'linear-gradient(135deg, #af52de, #8e44ad)' };
@@ -1241,8 +1316,25 @@
                 } catch (error) {
                     return 'Unknown';
                 }
+            },
+
+            // ============= CLEANUP =============
+
+            cleanup: function() {
+                try {
+                    this.profileLoadingManager.cleanup();
+                    this.currentUser = null;
+                    this.profileData = null;
+                    this.isInitialized = false;
+                    
+                    console.log('🧹 ProfileManager cleanup completed');
+                } catch (error) {
+                    console.error('❌ Error during ProfileManager cleanup:', error);
+                }
             }
         };
+
+        // ============= INITIALIZATION =============
 
         document.addEventListener('DOMContentLoaded', function() {
             try {
@@ -1250,12 +1342,15 @@
                 document.getElementById('loading-container').classList.add('show');
                 
                 ProfileManager.init();
+                console.log('✅ Profile page V2 initialized with thread-safe patterns');
             } catch (error) {
-                console.error('Error initializing Profile page:', error);
+                console.error('❌ Error initializing Profile page V2:', error);
             }
         });
 
         window.ProfileManager = ProfileManager;
+        
+        console.log('✅ Profile page V2 loaded - Thread-safe with FirebaseManager V2');
     </script>
 </body>
 </html>

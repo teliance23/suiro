@@ -1,21 +1,9 @@
 (function() {
     'use strict';
 
-    const AuthUtilsState = {
-        notificationQueue: [],
-        isProcessingNotifications: false
-    };
-
     window.AuthUtils = {
         
         config: {
-            notificationDuration: {
-                success: 4000,
-                error: 6000,
-                warning: 5000,
-                info: 4000
-            },
-            maxNotifications: 3,
             retryAttempts: 3,
             retryDelay: 1000
         },
@@ -145,278 +133,31 @@
             return new Promise(resolve => setTimeout(resolve, ms));
         },
 
-        // ============= NOTIFICATION SYSTEM =============
+        // ============= NOTIFICATION SYSTEM - DÉSACTIVÉ =============
         
         showSuccess: function(message, duration = null) {
-            this.showNotification(message, 'success', duration);
+            console.log(`✅ Success: ${message}`);
+            // Plus d'affichage visuel
         },
 
         showError: function(message, duration = null) {
-            this.showNotification(message, 'error', duration);
+            console.log(`❌ Error: ${message}`);
+            // Plus d'affichage visuel
         },
 
         showInfo: function(message, duration = null) {
-            this.showNotification(message, 'info', duration);
+            console.log(`ℹ️ Info: ${message}`);
+            // Plus d'affichage visuel
         },
 
         showWarning: function(message, duration = null) {
-            this.showNotification(message, 'warning', duration);
+            console.log(`⚠️ Warning: ${message}`);
+            // Plus d'affichage visuel
         },
 
         showNotification: function(message, type = 'info', duration = null) {
-            try {
-                const notification = {
-                    id: this.generateId('notif_'),
-                    message,
-                    type,
-                    duration: duration || this.config.notificationDuration[type] || 4000,
-                    timestamp: Date.now()
-                };
-
-                AuthUtilsState.notificationQueue.push(notification);
-                this.processNotificationQueue();
-            } catch (error) {
-                console.error('Error showNotification:', error);
-            }
-        },
-
-        processNotificationQueue: async function() {
-            if (AuthUtilsState.isProcessingNotifications) return;
-            
-            AuthUtilsState.isProcessingNotifications = true;
-            
-            try {
-                while (AuthUtilsState.notificationQueue.length > 0) {
-                    const notification = AuthUtilsState.notificationQueue.shift();
-                    
-                    const existingNotifications = document.querySelectorAll('.auth-utils-toast');
-                    if (existingNotifications.length >= this.config.maxNotifications) {
-                        existingNotifications[0].remove();
-                    }
-                    
-                    await this.displayNotification(notification);
-                    
-                    if (AuthUtilsState.notificationQueue.length > 0) {
-                        await this.delay(200);
-                    }
-                }
-            } catch (error) {
-                console.error('Error processNotificationQueue:', error);
-            } finally {
-                AuthUtilsState.isProcessingNotifications = false;
-            }
-        },
-
-        displayNotification: async function(notification) {
-            return new Promise((resolve) => {
-                try {
-                    const toast = document.createElement('div');
-                    toast.className = `auth-utils-toast auth-utils-toast-${notification.type}`;
-                    toast.id = notification.id;
-                    toast.setAttribute('role', 'alert');
-                    toast.setAttribute('aria-live', 'polite');
-                    
-                    toast.innerHTML = `
-                        <div class="toast-content">
-                            <div class="toast-icon">${this.getNotificationIcon(notification.type)}</div>
-                            <div class="toast-message">${this.escapeHtml(notification.message)}</div>
-                            <button class="toast-close" onclick="AuthUtils.closeNotification('${notification.id}')" aria-label="Close notification">×</button>
-                        </div>
-                        <div class="toast-progress">
-                            <div class="toast-progress-bar"></div>
-                        </div>
-                    `;
-                    
-                    this.applyNotificationStyles(toast);
-                    document.body.appendChild(toast);
-                    
-                    requestAnimationFrame(() => {
-                        toast.style.transform = 'translateX(0)';
-                        toast.style.opacity = '1';
-                    });
-                    
-                    const progressBar = toast.querySelector('.toast-progress-bar');
-                    if (progressBar) {
-                        progressBar.style.animationDuration = `${notification.duration}ms`;
-                    }
-                    
-                    setTimeout(() => {
-                        this.closeNotification(notification.id);
-                        resolve();
-                    }, notification.duration);
-                    
-                    toast.addEventListener('mouseenter', () => {
-                        toast.style.animationPlayState = 'paused';
-                    });
-                    
-                    toast.addEventListener('mouseleave', () => {
-                        toast.style.animationPlayState = 'running';
-                    });
-                    
-                } catch (error) {
-                    console.error('Error displayNotification:', error);
-                    resolve();
-                }
-            });
-        },
-
-        closeNotification: function(notificationId) {
-            try {
-                const toast = document.getElementById(notificationId);
-                if (toast) {
-                    toast.style.transform = 'translateX(100%)';
-                    toast.style.opacity = '0';
-                    setTimeout(() => toast.remove(), 300);
-                }
-            } catch (error) {
-                console.error('Error closeNotification:', error);
-            }
-        },
-
-        closeAllNotifications: function() {
-            try {
-                const notifications = document.querySelectorAll('.auth-utils-toast');
-                notifications.forEach(notification => {
-                    this.closeNotification(notification.id);
-                });
-            } catch (error) {
-                console.error('Error closeAllNotifications:', error);
-            }
-        },
-
-        applyNotificationStyles: function(toast) {
-            if (document.getElementById('auth-utils-toast-styles')) return;
-            
-            const style = document.createElement('style');
-            style.id = 'auth-utils-toast-styles';
-            style.textContent = `
-                .auth-utils-toast {
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    min-width: 320px;
-                    max-width: 400px;
-                    background: white;
-                    border-radius: 12px;
-                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-                    transform: translateX(100%);
-                    opacity: 0;
-                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                    z-index: 10000;
-                    margin-bottom: 10px;
-                    overflow: hidden;
-                    border-left: 4px solid;
-                }
-                
-                .auth-utils-toast:nth-child(n+2) {
-                    margin-top: 10px;
-                }
-                
-                .auth-utils-toast-success { border-left-color: #10b981; }
-                .auth-utils-toast-error { border-left-color: #ef4444; }
-                .auth-utils-toast-warning { border-left-color: #f59e0b; }
-                .auth-utils-toast-info { border-left-color: #3b82f6; }
-                
-                .toast-content {
-                    display: flex;
-                    align-items: flex-start;
-                    padding: 16px;
-                    gap: 12px;
-                }
-                
-                .toast-icon {
-                    font-size: 20px;
-                    flex-shrink: 0;
-                    margin-top: 2px;
-                }
-                
-                .toast-message {
-                    flex: 1;
-                    font-size: 14px;
-                    font-weight: 500;
-                    line-height: 1.4;
-                    color: #1f2937;
-                }
-                
-                .toast-close {
-                    background: none;
-                    border: none;
-                    font-size: 18px;
-                    color: #6b7280;
-                    cursor: pointer;
-                    padding: 0;
-                    width: 20px;
-                    height: 20px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 50%;
-                    transition: all 0.2s ease;
-                    flex-shrink: 0;
-                }
-                
-                .toast-close:hover {
-                    background: #f3f4f6;
-                    color: #374151;
-                }
-                
-                .toast-progress {
-                    height: 3px;
-                    background: #f3f4f6;
-                    overflow: hidden;
-                }
-                
-                .toast-progress-bar {
-                    height: 100%;
-                    background: linear-gradient(90deg, #10b981, #059669);
-                    animation: progress linear;
-                    transform-origin: left;
-                }
-                
-                .auth-utils-toast-error .toast-progress-bar {
-                    background: linear-gradient(90deg, #ef4444, #dc2626);
-                }
-                
-                .auth-utils-toast-warning .toast-progress-bar {
-                    background: linear-gradient(90deg, #f59e0b, #d97706);
-                }
-                
-                .auth-utils-toast-info .toast-progress-bar {
-                    background: linear-gradient(90deg, #3b82f6, #2563eb);
-                }
-                
-                @keyframes progress {
-                    from { transform: scaleX(1); }
-                    to { transform: scaleX(0); }
-                }
-                
-                @media (max-width: 480px) {
-                    .auth-utils-toast {
-                        right: 10px;
-                        left: 10px;
-                        min-width: auto;
-                        max-width: none;
-                    }
-                }
-            `;
-            
-            document.head.appendChild(style);
-        },
-
-        getNotificationIcon: function(type) {
-            const icons = {
-                success: '✅',
-                error: '❌',
-                warning: '⚠️',
-                info: 'ℹ️'
-            };
-            return icons[type] || 'ℹ️';
-        },
-
-        escapeHtml: function(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+            console.log(`📢 Notification [${type}]: ${message}`);
+            // Plus d'affichage visuel - juste dans la console
         },
 
         // ============= POST-LOGIN HANDLING =============
@@ -426,30 +167,34 @@
                 if (!user) return;
                 
                 window.FirebaseManager._getUserDataWithCache(user).then(userData => {
-                    if (!window.FirebaseManager.isProfileComplete(userData)) {
-                        this.showInfo('Please complete your profile to continue.');
+                    const displayName = window.FirebaseManager.getDisplayName(userData);
+                    console.log(`✅ Welcome back, ${displayName}!`);
+                    
+                    // Navigation directe sans notifications visuelles
+                    if (redirectTo) {
                         setTimeout(() => {
-                            const settingsUrl = redirectTo ? 
-                                `../settings/?redirect=${encodeURIComponent(redirectTo)}` : 
-                                '../settings/';
-                            window.location.href = settingsUrl;
-                        }, 2000);
+                            window.location.href = redirectTo;
+                        }, 1000); // Réduit le délai
                     } else {
-                        this.showSuccess(`Welcome back, ${window.FirebaseManager.getDisplayName(userData)}!`);
-                        
-                        if (redirectTo) {
-                            setTimeout(() => {
-                                window.location.href = redirectTo;
-                            }, 1500);
-                        }
+                        setTimeout(() => {
+                            window.FirebaseManager.navigateToHome();
+                        }, 1000);
                     }
+                    
                 }).catch(error => {
                     console.error('Error handlePostLogin:', error);
-                    this.showError('Error loading user data.');
+                    
+                    setTimeout(() => {
+                        window.FirebaseManager.navigateToHome();
+                    }, 1500);
                 });
                 
             } catch (error) {
                 console.error('Error handlePostLogin:', error);
+                
+                setTimeout(() => {
+                    window.FirebaseManager.navigateToHome();
+                }, 1500);
             }
         },
 
@@ -458,16 +203,16 @@
         }
     };
 
-    // ============= GLOBAL ALIASES - NOTIFICATIONS ONLY =============
+    // ============= GLOBAL ALIASES - CONSOLE SEULEMENT =============
     
-    window.showSuccess = (message, duration) => AuthUtils.showSuccess(message, duration);
-    window.showError = (message, duration) => AuthUtils.showError(message, duration);
-    window.showInfo = (message, duration) => AuthUtils.showInfo(message, duration);
-    window.showWarning = (message, duration) => AuthUtils.showWarning(message, duration);
+    window.showSuccess = (message, duration) => console.log(`✅ ${message}`);
+    window.showError = (message, duration) => console.log(`❌ ${message}`);
+    window.showInfo = (message, duration) => console.log(`ℹ️ ${message}`);
+    window.showWarning = (message, duration) => console.log(`⚠️ ${message}`);
 
     function initAuthUtils() {
         try {
-            console.log('✅ AuthUtils initialized - Firebase Manager authority respected');
+            console.log('✅ AuthUtils initialized - Notifications disabled (console only)');
         } catch (error) {
             console.error('Error initializing AuthUtils:', error);
         }

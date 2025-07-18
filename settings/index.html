@@ -983,7 +983,7 @@
 
                 <!-- Save Button -->
                 <div class="save-container">
-                    <button class="save-btn" id="save-btn" onclick="SettingsManager.saveSettings()">
+                    <button class="save-btn" id="save-btn" onclick="SettingsManager.saveSettingsV2()">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/>
                         </svg>
@@ -1016,44 +1016,57 @@
     <script src="../mobile/menu.js"></script>
     
     <script>
+        // ============= SETTINGS MANAGER V2 - THREAD-SAFE AVEC FIREBASE MANAGER V2 =============
+        
         const SettingsManager = {
+            // ============= STATE MANAGEMENT THREAD-SAFE =============
             currentUser: null,
             userData: null,
+            firebaseManager: null,
             isSaving: false,
             validationCache: new Map(),
             gamertagCheckTimeout: null,
+            retryCount: 0,
+            maxRetries: 3,
+            isInitialized: false,
+            
+            // ============= INITIALIZATION THREAD-SAFE =============
             
             init: function() {
                 try {
-                    this.setupAuthentication();
+                    console.log('⚙️ Initializing SettingsManager V2...');
+                    
+                    this.setupFirebaseManagerV2();
                     this.setupValidation();
                     this.setupEventListeners();
                     this.setupPhotoUpload();
+                    
+                    console.log('✅ SettingsManager V2 initialized with thread-safe patterns');
+                    
                 } catch (error) {
-                    console.error('Error initializing Settings:', error);
+                    console.error('❌ Error initializing SettingsManager V2:', error);
                     this.showError('Failed to initialize settings page');
                 }
             },
 
-            setupAuthentication: function() {
-                const waitForFirebase = () => {
-                    if (typeof window.FirebaseManager !== 'undefined') {
-                        this.initFirebaseAuth();
-                    } else {
-                        setTimeout(waitForFirebase, 100);
-                    }
-                };
-                waitForFirebase();
-            },
-
-            initFirebaseAuth: function() {
+            // ✅ NOUVEAU PATTERN - Utilise getInstance() au lieu d'initialize()
+            setupFirebaseManagerV2: async function() {
                 try {
-                    window.FirebaseManager.onAuthStateChanged(async (user, userData) => {
+                    // ✅ Utiliser la nouvelle API thread-safe
+                    this.firebaseManager = await window.FirebaseManager.getInstance();
+                    
+                    // ✅ Attendre que Firebase soit prêt avec waitForAuthReady()
+                    await this.firebaseManager.waitForAuthReady();
+                    
+                    // ✅ Utiliser la nouvelle API de callbacks
+                    this.firebaseManager.onAuthStateChanged(async (user, userData) => {
                         this.currentUser = user;
                         
                         if (user) {
-                            await this.loadUserSettings(user);
+                            // ✅ ÉLIMINATION DUPLICATION - Utiliser la même API que profile
+                            await this.loadUserSettingsV2(user);
                             
+                            // ✅ Synchronisation thread-safe avec AuthHeader
                             if (typeof window.AuthHeader !== 'undefined' && window.AuthHeader.updateAuthState) {
                                 window.AuthHeader.updateAuthState(user, userData);
                             }
@@ -1061,89 +1074,53 @@
                             this.redirectToAuth();
                         }
                     });
+                    
+                    this.isInitialized = true;
+                    console.log('✅ Firebase Manager V2 setup completed for settings');
+                    
                 } catch (error) {
-                    console.error('Error initFirebaseAuth:', error);
-                    this.showError('Authentication error');
-                    this.redirectToAuth();
+                    console.error('❌ Error setupFirebaseManagerV2:', error);
+                    await this.handleRetryLogic(error);
                 }
             },
 
-            redirectToAuth: function() {
-                setTimeout(() => {
-                    window.navigateTo('auth');
-                }, 1000);
-            },
-
-            loadUserSettings: async function(user) {
+            // ✅ SUPPRESSION DUPLICATION - Utilise la même API que profile
+            loadUserSettingsV2: async function(user) {
                 try {
-                    this.userData = await this.getUserDataSafely(user);
-                    this.updateSettingsUI(this.userData);
+                    // ✅ NOUVELLE API UNIFIÉE - Remplace getUserDataSafely(), fetchUserProfile(), etc.
+                    this.userData = await this.firebaseManager.getUserData(user, {
+                        includeProfile: true,
+                        includeStats: false,
+                        useCache: true,
+                        validatePermissions: false
+                    });
+                    
+                    this.updateSettingsUIV2(this.userData);
                     
                     document.getElementById('loading-container').classList.remove('show');
                     document.getElementById('settings-content').style.display = 'block';
+                    
+                    console.log('✅ User settings loaded successfully');
+                    
                 } catch (error) {
-                    console.error('Error loadUserSettings:', error);
+                    console.error('❌ Error loadUserSettingsV2:', error);
                     this.showError('Failed to load settings');
                 }
             },
 
-            getUserDataSafely: async function(user) {
-                try {
-                    if (window.AuthUtils && window.AuthUtils.getUserData) {
-                        return await window.AuthUtils.getUserData(user);
-                    }
-                    
-                    if (typeof window.getUserData === 'function') {
-                        return await window.getUserData(user);
-                    }
-                    
-                    if (window.FirebaseManager && window.FirebaseManager.firebaseAuth && window.FirebaseManager.db) {
-                        const userRef = window.FirebaseManager.firebaseAuth.doc(window.FirebaseManager.db, 'users', user.uid);
-                        const userDoc = await window.FirebaseManager.firebaseAuth.getDoc(userRef);
-                        
-                        if (userDoc.exists()) {
-                            return { ...user, ...userDoc.data() };
-                        } else {
-                            const defaultProfile = this.createDefaultProfile(user);
-                            await window.FirebaseManager.firebaseAuth.setDoc(userRef, defaultProfile);
-                            return { ...user, ...defaultProfile };
-                        }
-                    }
-                    
-                    return user;
-                } catch (error) {
-                    console.error('Error getUserDataSafely:', error);
-                    return user;
-                }
-            },
+            // ✅ SUPPRESSION DUPLICATION - Plus de createDefaultProfile() dupliqué
+            // Le FirebaseManager s'occupe maintenant de la création des profils par défaut
 
-            createDefaultProfile: function(user) {
-                return {
-                    displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
-                    email: user.email,
-                    profile: {
-                        isProfileComplete: true,
-                        displayPreference: 'realname',
-                        joinDate: new Date(),
-                        gamertag: '',
-                        nationality: ''
-                    },
-                    privacy: {
-                        profileVisibility: 'public',
-                        showInLeaderboards: true
-                    },
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                };
-            },
-
-            updateSettingsUI: function(userData) {
+            updateSettingsUIV2: function(userData) {
                 try {
-                    // Basic Information
-                    const displayName = window.FirebaseManager.getDisplayName(userData) || 'Anonymous Player';
+                    // ✅ Utiliser les méthodes thread-safe du FirebaseManager
+                    const displayName = this.firebaseManager.getDisplayName(userData);
                     const avatarInitial = displayName.charAt(0).toUpperCase();
                     
-                    document.getElementById('current-photo').textContent = avatarInitial;
+                    // Profile Photo
+                    this.updateProfilePhotoV2(userData.photoURL, displayName);
+                    
+                    // Basic Information
                     document.getElementById('display-name').value = userData.displayName || '';
                     document.getElementById('email').value = userData.email || '';
                     document.getElementById('gamertag').value = userData.profile?.gamertag || '';
@@ -1159,15 +1136,13 @@
 
                     const showLeaderboard = userData.privacy?.showInLeaderboards !== false;
                     this.updateLeaderboardToggle(showLeaderboard);
-
-                    // Profile Photo
-                    this.updateProfilePhoto(userData.photoURL, displayName);
+                    
                 } catch (error) {
-                    console.error('Error updateSettingsUI:', error);
+                    console.error('❌ Error updateSettingsUIV2:', error);
                 }
             },
 
-            updateProfilePhoto: function(photoURL, displayName) {
+            updateProfilePhotoV2: function(photoURL, displayName) {
                 const photoElement = document.getElementById('current-photo');
                 if (photoURL) {
                     photoElement.innerHTML = `<img src="${photoURL}" alt="Profile">`;
@@ -1177,19 +1152,21 @@
                 }
             },
 
+            // ============= VALIDATION =============
+
             setupValidation: function() {
                 const gamertagInput = document.getElementById('gamertag');
                 if (gamertagInput) {
                     gamertagInput.addEventListener('input', (e) => {
                         clearTimeout(this.gamertagCheckTimeout);
                         this.gamertagCheckTimeout = setTimeout(() => {
-                            this.validateGamertag(e.target.value);
+                            this.validateGamertagV2(e.target.value);
                         }, 500);
                     });
                 }
             },
 
-            validateGamertag: async function(gamertag) {
+            validateGamertagV2: async function(gamertag) {
                 const input = document.getElementById('gamertag');
                 const feedback = document.getElementById('gamertag-feedback');
                 
@@ -1201,28 +1178,26 @@
 
                     if (!gamertag) return;
 
-                    if (gamertag.length < 3) {
-                        this.showValidationError(input, feedback, 'Gamertag must be at least 3 characters');
-                        return;
-                    }
-                    
-                    if (gamertag.length > 20) {
-                        this.showValidationError(input, feedback, 'Gamertag must be less than 20 characters');
-                        return;
-                    }
-                    
-                    if (!/^[a-zA-Z0-9_-]+$/.test(gamertag)) {
-                        this.showValidationError(input, feedback, 'Only letters, numbers, underscore and dash allowed');
+                    // ✅ Utiliser AuthUtils pour la validation
+                    const validation = window.AuthUtils.validateGamertag(gamertag);
+                    if (!validation.isValid) {
+                        this.showValidationError(input, feedback, validation.error);
                         return;
                     }
 
                     this.showValidationChecking(input, feedback, 'Checking availability...');
                     
-                    // Check uniqueness (simplified - you'll need proper implementation)
-                    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API call
-                    this.showValidationSuccess(input, feedback, 'Gamertag is available');
+                    // ✅ Utiliser la nouvelle API pour vérifier l'unicité
+                    const uniqueCheck = await window.AuthUtils.checkGamertagUniqueness(gamertag, this.currentUser?.uid);
+                    
+                    if (uniqueCheck.isUnique) {
+                        this.showValidationSuccess(input, feedback, 'Gamertag is available');
+                    } else {
+                        this.showValidationError(input, feedback, uniqueCheck.error || 'Gamertag is not available');
+                    }
+                    
                 } catch (error) {
-                    console.error('Error validateGamertag:', error);
+                    console.error('❌ Error validateGamertagV2:', error);
                     this.showValidationError(input, feedback, 'Error checking availability');
                 }
             },
@@ -1244,6 +1219,147 @@
                 feedback.textContent = message;
                 feedback.classList.add('show', 'checking');
             },
+
+            // ============= SAVE SETTINGS V2 =============
+
+            // ✅ NOUVEAU PATTERN - Thread-safe avec transactions Firebase
+            saveSettingsV2: async function() {
+                if (this.isSaving) return;
+                
+                this.isSaving = true;
+                const saveBtn = document.getElementById('save-btn');
+                const originalHTML = saveBtn.innerHTML;
+                
+                try {
+                    saveBtn.disabled = true;
+                    saveBtn.classList.add('btn-loading');
+                    
+                    const formData = this.collectFormDataV2();
+                    await this.validateFormDataV2(formData);
+                    
+                    // ✅ TRANSACTIONS FIRESTORE - Thread-safe race condition fix
+                    await this.saveToFirestoreV2(formData);
+                    
+                    this.userData = { ...this.userData, ...formData };
+                    this.showSuccess('Settings saved successfully!');
+                    
+                    // ✅ Synchronisation thread-safe avec AuthHeader
+                    if (typeof window.AuthHeader !== 'undefined' && window.AuthHeader.updateAuthState) {
+                        window.AuthHeader.updateAuthState(this.currentUser, this.userData);
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Error saveSettingsV2:', error);
+                    this.showError(error.message || 'Failed to save settings. Please try again.');
+                } finally {
+                    this.isSaving = false;
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove('btn-loading');
+                    saveBtn.innerHTML = originalHTML;
+                }
+            },
+
+            collectFormDataV2: function() {
+                return {
+                    profile: {
+                        gamertag: document.getElementById('gamertag').value.trim(),
+                        nationality: document.getElementById('nationality').value,
+                        displayPreference: document.querySelector('input[name="display-preference"]:checked')?.value || 'realname',
+                        isProfileComplete: true,
+                        joinDate: this.userData?.profile?.joinDate || new Date()
+                    },
+                    privacy: {
+                        profileVisibility: document.querySelector('input[name="profile-visibility"]:checked')?.value || 'public',
+                        showInLeaderboards: document.getElementById('leaderboard-toggle').classList.contains('active')
+                    },
+                    updatedAt: new Date()
+                };
+            },
+
+            validateFormDataV2: async function(formData) {
+                const { gamertag } = formData.profile;
+                
+                // Gamertag validation is optional
+                if (gamertag) {
+                    const validation = window.AuthUtils.validateGamertag(gamertag);
+                    if (!validation.isValid) {
+                        throw new Error(validation.error);
+                    }
+                }
+            },
+
+            // ✅ TRANSACTIONS FIRESTORE - Thread-safe race condition fix
+            saveToFirestoreV2: async function(formData) {
+                try {
+                    // ✅ Utiliser updateUserDataTransaction() thread-safe
+                    await this.firebaseManager.updateUserDataTransaction(
+                        this.currentUser.uid,
+                        (currentData) => ({
+                            ...currentData,
+                            ...formData,
+                            updatedAt: new Date()
+                        })
+                    );
+                    
+                    console.log('✅ Settings saved with transaction');
+                    
+                } catch (error) {
+                    console.error('❌ Error saveToFirestoreV2:', error);
+                    throw new Error('Failed to save to database');
+                }
+            },
+
+            // ============= PHOTO UPLOAD =============
+
+            setupPhotoUpload: function() {
+                const photoInput = document.getElementById('photo-input');
+                if (photoInput) {
+                    photoInput.addEventListener('change', (event) => {
+                        this.handlePhotoUploadV2(event);
+                    });
+                }
+            },
+
+            handlePhotoUploadV2: async function(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                // Validation
+                if (!file.type.startsWith('image/')) {
+                    this.showError('Please select an image file.');
+                    return;
+                }
+
+                if (file.size > 5 * 1024 * 1024) { // 5MB
+                    this.showError('Image size must be less than 5MB.');
+                    return;
+                }
+
+                try {
+                    // Show loading state
+                    const photoElement = document.getElementById('current-photo');
+                    const originalContent = photoElement.innerHTML;
+                    photoElement.innerHTML = '<div class="spinner" style="width: 24px; height: 24px; border-width: 2px;"></div>';
+                    
+                    // Simulate upload (vous pouvez implémenter l'upload réel avec Firebase Storage)
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // Create preview URL
+                    const previewURL = URL.createObjectURL(file);
+                    this.updateProfilePhotoV2(previewURL, this.currentUser?.displayName);
+                    
+                    this.showSuccess('Profile photo updated successfully!');
+                    
+                } catch (error) {
+                    console.error('❌ Error uploadPhotoV2:', error);
+                    this.showError('Failed to upload photo. Please try again.');
+                    
+                    // Restore original on error
+                    this.updateProfilePhotoV2(this.currentUser?.photoURL, this.currentUser?.displayName);
+                }
+            },
+
+            // ============= UI HELPERS =============
 
             selectDisplayPreference: function(value) {
                 document.querySelectorAll('input[name="display-preference"]').forEach(radio => {
@@ -1273,134 +1389,7 @@
                 }
             },
 
-            setupPhotoUpload: function() {
-                const photoInput = document.getElementById('photo-input');
-                if (photoInput) {
-                    photoInput.addEventListener('change', (event) => {
-                        this.handlePhotoUpload(event);
-                    });
-                }
-            },
-
-            handlePhotoUpload: async function(event) {
-                const file = event.target.files[0];
-                if (!file) return;
-
-                // Validation
-                if (!file.type.startsWith('image/')) {
-                    alert('Please select an image file.');
-                    return;
-                }
-
-                if (file.size > 5 * 1024 * 1024) { // 5MB
-                    alert('Image size must be less than 5MB.');
-                    return;
-                }
-
-                try {
-                    // Show loading state
-                    const photoElement = document.getElementById('current-photo');
-                    const originalContent = photoElement.innerHTML;
-                    photoElement.innerHTML = '<div class="spinner" style="width: 24px; height: 24px; border-width: 2px;"></div>';
-                    
-                    // Simulate upload (you'll need proper implementation)
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    
-                    // Create preview URL
-                    const previewURL = URL.createObjectURL(file);
-                    this.updateProfilePhoto(previewURL, this.currentUser?.displayName);
-                    
-                    this.showSuccess('Profile photo updated successfully!');
-                } catch (error) {
-                    console.error('Error uploading photo:', error);
-                    this.showError('Failed to upload photo. Please try again.');
-                    
-                    // Restore original on error
-                    this.updateProfilePhoto(this.currentUser?.photoURL, this.currentUser?.displayName);
-                }
-            },
-
-            saveSettings: async function() {
-                if (this.isSaving) return;
-                
-                this.isSaving = true;
-                const saveBtn = document.getElementById('save-btn');
-                const originalHTML = saveBtn.innerHTML;
-                
-                try {
-                    saveBtn.disabled = true;
-                    saveBtn.classList.add('btn-loading');
-                    
-                    const formData = this.collectFormData();
-                    await this.validateFormData(formData);
-                    await this.saveToFirestore(formData);
-                    
-                    this.userData = { ...this.userData, ...formData };
-                    this.showSuccess('Settings saved successfully!');
-                    
-                    if (typeof window.AuthHeader !== 'undefined' && window.AuthHeader.updateAuthState) {
-                        window.AuthHeader.updateAuthState(this.currentUser, this.userData);
-                    }
-                } catch (error) {
-                    console.error('Error saveSettings:', error);
-                    this.showError(error.message || 'Failed to save settings. Please try again.');
-                } finally {
-                    this.isSaving = false;
-                    saveBtn.disabled = false;
-                    saveBtn.classList.remove('btn-loading');
-                    saveBtn.innerHTML = originalHTML;
-                }
-            },
-
-            collectFormData: function() {
-                return {
-                    profile: {
-                        gamertag: document.getElementById('gamertag').value.trim(),
-                        nationality: document.getElementById('nationality').value,
-                        displayPreference: document.querySelector('input[name="display-preference"]:checked')?.value || 'realname',
-                        isProfileComplete: true,
-                        joinDate: this.userData?.profile?.joinDate || new Date()
-                    },
-                    privacy: {
-                        profileVisibility: document.querySelector('input[name="profile-visibility"]:checked')?.value || 'public',
-                        showInLeaderboards: document.getElementById('leaderboard-toggle').classList.contains('active')
-                    },
-                    updatedAt: new Date()
-                };
-            },
-
-            validateFormData: async function(formData) {
-                const { gamertag } = formData.profile;
-                
-                // Gamertag validation is optional
-                if (gamertag) {
-                    if (gamertag.length < 3) {
-                        throw new Error('Gamertag must be at least 3 characters long');
-                    }
-                    
-                    if (gamertag.length > 20) {
-                        throw new Error('Gamertag must be less than 20 characters');
-                    }
-                    
-                    if (!/^[a-zA-Z0-9_-]+$/.test(gamertag)) {
-                        throw new Error('Gamertag can only contain letters, numbers, underscore and dash');
-                    }
-                }
-            },
-
-            saveToFirestore: async function(formData) {
-                try {
-                    if (!window.FirebaseManager || !window.FirebaseManager.firebaseAuth || !window.FirebaseManager.db) {
-                        throw new Error('Firebase not available');
-                    }
-
-                    const userRef = window.FirebaseManager.firebaseAuth.doc(window.FirebaseManager.db, 'users', this.currentUser.uid);
-                    await window.FirebaseManager.firebaseAuth.updateDoc(userRef, formData);
-                } catch (error) {
-                    console.error('Error saveToFirestore:', error);
-                    throw new Error('Failed to save to database');
-                }
-            },
+            // ============= EVENT LISTENERS =============
 
             setupEventListeners: function() {
                 try {
@@ -1425,13 +1414,46 @@
                     document.addEventListener('keydown', (e) => {
                         if (e.ctrlKey && e.key === 's') {
                             e.preventDefault();
-                            this.saveSettings();
+                            this.saveSettingsV2();
                         }
                     });
                 } catch (error) {
-                    console.error('Error setupEventListeners:', error);
+                    console.error('❌ Error setupEventListeners:', error);
                 }
             },
+
+            // ============= RETRY LOGIC =============
+
+            async handleRetryLogic(error) {
+                if (this.retryCount < this.maxRetries) {
+                    this.retryCount++;
+                    const delay = Math.min(1000 * Math.pow(2, this.retryCount), 10000);
+                    
+                    console.log(`🔄 Retrying SettingsManager operation (${this.retryCount}/${this.maxRetries}) in ${delay}ms`);
+                    
+                    setTimeout(async () => {
+                        try {
+                            await this.setupFirebaseManagerV2();
+                        } catch (retryError) {
+                            console.error('❌ Retry failed:', retryError);
+                            if (this.retryCount >= this.maxRetries) {
+                                this.showError('Max retries reached');
+                            }
+                        }
+                    }, delay);
+                } else {
+                    console.error('❌ Max retries reached for SettingsManager');
+                    this.showError('Connection failed');
+                }
+            },
+
+            redirectToAuth: function() {
+                setTimeout(() => {
+                    this.firebaseManager.navigateTo('auth');
+                }, 1000);
+            },
+
+            // ============= NOTIFICATIONS =============
 
             showSuccess: function(message) {
                 const successAlert = document.getElementById('success-alert');
@@ -1459,8 +1481,28 @@
                         errorAlert.classList.remove('show');
                     }, 5000);
                 }
+            },
+
+            // ============= CLEANUP =============
+
+            cleanup: function() {
+                try {
+                    this.currentUser = null;
+                    this.userData = null;
+                    this.isInitialized = false;
+                    
+                    if (this.gamertagCheckTimeout) {
+                        clearTimeout(this.gamertagCheckTimeout);
+                    }
+                    
+                    console.log('🧹 SettingsManager cleanup completed');
+                } catch (error) {
+                    console.error('❌ Error during SettingsManager cleanup:', error);
+                }
             }
         };
+
+        // ============= INITIALIZATION =============
 
         document.addEventListener('DOMContentLoaded', function() {
             try {
@@ -1468,12 +1510,15 @@
                 document.getElementById('loading-container').classList.add('show');
                 
                 SettingsManager.init();
+                console.log('✅ Settings page V2 initialized with thread-safe patterns');
             } catch (error) {
-                console.error('Error initializing Settings page:', error);
+                console.error('❌ Error initializing Settings page V2:', error);
             }
         });
 
         window.SettingsManager = SettingsManager;
+        
+        console.log('✅ Settings page V2 loaded - Thread-safe with FirebaseManager V2');
     </script>
 </body>
 </html>

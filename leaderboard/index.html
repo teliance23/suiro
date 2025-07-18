@@ -1034,6 +1034,7 @@
                 }
             },
 
+            // 🔧 FONCTION CORRIGÉE - Évite les index composites complexes
             fetchLeaderboardFromFirebase: async function() {
                 try {
                     const firebase = await window.FirebaseManager.initialize();
@@ -1041,24 +1042,29 @@
                         throw new Error('Firebase non disponible');
                     }
 
-                    let leaderboardQuery = firebase.query(
-                        firebase.collection(firebase.db, 'users'),
-                        firebase.where('improvedStats.totalGames', '>', 0), // ✅ CHANGÉ: improvedStats
-                        firebase.where('privacy.showInLeaderboards', '==', true)
-                    );
+                    console.log('🔍 Chargement leaderboard depuis Firestore...');
 
-                    if (this.currentRegion !== 'global') {
+                    // ✅ STRATÉGIE SIMPLIFIÉE: Éviter les index composites complexes
+                    let leaderboardQuery;
+
+                    if (this.currentRegion === 'global') {
+                        // Requête globale simplifiée - évite l'index composite
                         leaderboardQuery = firebase.query(
-                            leaderboardQuery,
-                            firebase.where('profile.nationality', '==', this.currentRegion)
+                            firebase.collection(firebase.db, 'users'),
+                            firebase.where('privacy.showInLeaderboards', '==', true),
+                            firebase.orderBy('improvedStats.ranked.currentRating', 'desc'),
+                            firebase.limit(this.currentLimit)
+                        );
+                    } else {
+                        // Requête régionale simplifiée
+                        leaderboardQuery = firebase.query(
+                            firebase.collection(firebase.db, 'users'),
+                            firebase.where('privacy.showInLeaderboards', '==', true),
+                            firebase.where('profile.nationality', '==', this.currentRegion),
+                            firebase.orderBy('improvedStats.ranked.currentRating', 'desc'),
+                            firebase.limit(this.currentLimit)
                         );
                     }
-
-                    leaderboardQuery = firebase.query(
-                        leaderboardQuery,
-                        firebase.orderBy('improvedStats.ranked.currentRating', 'desc'), // ✅ CHANGÉ: improvedStats
-                        firebase.limit(this.currentLimit)
-                    );
 
                     if (this.lastVisibleDoc) {
                         leaderboardQuery = firebase.query(
@@ -1080,17 +1086,24 @@
                     const players = [];
                     querySnapshot.docs.forEach((doc, index) => {
                         const userData = doc.data();
-                        const player = this.processPlayerData(userData, index + 1);
-                        if (player) {
-                            players.push(player);
+                        
+                        // ✅ FILTRAGE CÔTÉ CLIENT pour totalGames > 0
+                        // Cela évite le besoin d'un index composite complexe
+                        if (userData.improvedStats?.totalGames > 0) {
+                            const player = this.processPlayerData(userData, index + 1);
+                            if (player) {
+                                players.push(player);
+                            }
                         }
                     });
 
+                    console.log(`✅ Données chargées: ${players.length} joueurs qualifiés`);
                     return players;
                     
                 } catch (error) {
                     console.error('❌ Erreur fetchLeaderboardFromFirebase:', error);
                     
+                    // Fallback vers données exemple en cas d'erreur
                     if (this.leaderboardData.length === 0) {
                         console.log('📋 Utilisation données exemple en fallback');
                         return this.getFallbackData();
@@ -1102,21 +1115,21 @@
 
             processPlayerData: function(userData, baseRank) {
                 try {
-                    if (!userData || !userData.improvedStats) return null; // ✅ CHANGÉ: improvedStats
+                    if (!userData || !userData.improvedStats) return null;
 
-                    const stats = userData.improvedStats; // ✅ CHANGÉ: improvedStats
+                    const stats = userData.improvedStats;
                     const profile = userData.profile || {};
                     
                     return {
                         rank: this.leaderboardData.length + baseRank,
                         userId: userData.uid,
                         displayName: this.getDisplayName(userData),
-                        level: this.getPlayerLevel(stats.ranked?.currentRating || 0), // ✅ CHANGÉ
-                        rankingPoints: stats.ranked?.currentRating || 0, // ✅ CHANGÉ
-                        totalGames: stats.totalGames || 0, // ✅ CHANGÉ
-                        winRate: this.calculateWinRate(stats), // ✅ CHANGÉ: nouvelle fonction
-                        currentStreak: stats.ranked?.winStreak || 0, // ✅ CHANGÉ
-                        perfectGames: this.calculatePerfectGames(stats), // ✅ CHANGÉ: nouvelle fonction
+                        level: this.getPlayerLevel(stats.ranked?.currentRating || 0),
+                        rankingPoints: stats.ranked?.currentRating || 0,
+                        totalGames: stats.totalGames || 0,
+                        winRate: this.calculateWinRate(stats),
+                        currentStreak: stats.ranked?.winStreak || 0,
+                        perfectGames: this.calculatePerfectGames(stats),
                         nationality: profile.nationality || null,
                         isCurrentUser: this.currentUser && userData.uid === this.currentUser.uid
                     };
@@ -1127,7 +1140,6 @@
                 }
             },
 
-            // ✅ NOUVELLE FONCTION: Calculer win rate depuis improvedStats
             calculateWinRate: function(improvedStats) {
                 try {
                     const totalWins = (improvedStats.practice?.gamesCompleted || 0) + (improvedStats.ranked?.gamesCompleted || 0);
@@ -1138,12 +1150,10 @@
                 }
             },
 
-            // ✅ NOUVELLE FONCTION: Calculer perfect games depuis improvedStats
             calculatePerfectGames: function(improvedStats) {
                 try {
-                    // Estimation basée sur les jeux complétés (à ajuster selon vos critères)
                     const completedGames = (improvedStats.practice?.gamesCompleted || 0) + (improvedStats.ranked?.gamesCompleted || 0);
-                    return Math.floor(completedGames * 0.15); // 15% des jeux complétés sont "parfaits"
+                    return Math.floor(completedGames * 0.15);
                 } catch (error) {
                     return 0;
                 }
@@ -1174,9 +1184,11 @@
                 try {
                     const firebase = await window.FirebaseManager.initialize();
                     
+                    // Requête simplifiée pour les stats globales
                     const usersQuery = firebase.query(
                         firebase.collection(firebase.db, 'users'),
-                        firebase.where('improvedStats.totalGames', '>', 0) // ✅ CHANGÉ: improvedStats
+                        firebase.where('privacy.showInLeaderboards', '==', true),
+                        firebase.limit(100) // Limitation pour les stats
                     );
                     
                     const querySnapshot = await firebase.getDocs(usersQuery);
@@ -1188,17 +1200,19 @@
                     
                     querySnapshot.docs.forEach(doc => {
                         const userData = doc.data();
-                        const stats = userData.improvedStats || {}; // ✅ CHANGÉ: improvedStats
+                        const stats = userData.improvedStats || {};
                         
-                        totalPlayers++;
-                        totalGames += stats.totalGames || 0;
-                        
-                        // ✅ CHANGÉ: Calculer score moyen depuis improvedStats
-                        const avgScore = stats.practice?.totalScore && stats.practice?.gamesCompleted ? 
-                            Math.round(stats.practice.totalScore / stats.practice.gamesCompleted) : 0;
-                        totalScore += avgScore;
-                        
-                        maxStreak = Math.max(maxStreak, stats.ranked?.winStreak || 0); // ✅ CHANGÉ
+                        // Filtrage côté client
+                        if (stats.totalGames > 0) {
+                            totalPlayers++;
+                            totalGames += stats.totalGames || 0;
+                            
+                            const avgScore = stats.practice?.totalScore && stats.practice?.gamesCompleted ? 
+                                Math.round(stats.practice.totalScore / stats.practice.gamesCompleted) : 0;
+                            totalScore += avgScore;
+                            
+                            maxStreak = Math.max(maxStreak, stats.ranked?.winStreak || 0);
+                        }
                     });
                     
                     return {

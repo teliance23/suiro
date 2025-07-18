@@ -312,12 +312,18 @@
     const AuthHeaderState = {
         currentUser: null,
         userData: null,
+        authState: 'initializing',
+        updateInProgress: false,
+        authUnsubscribe: null,
         isLoading: false,
         isInitialized: false,
         hasError: false
     };
 
     window.AuthHeader = {
+        authState: 'initializing',
+        updateInProgress: false,
+        authUnsubscribe: null,
         
         init: function() {
             try {
@@ -335,28 +341,81 @@
             try {
                 await window.FirebaseManager.initialize();
                 
-                window.FirebaseManager.onAuthStateChanged((user, userData) => {
-                    AuthHeaderState.currentUser = user;
-                    AuthHeaderState.userData = userData;
-                    
-                    if (user) {
-                        this.updateAuthenticatedUI(userData || user);
-                    } else {
-                        this.showNotAuthenticatedState();
+                const unsubscribe = window.FirebaseManager.onAuthStateChanged(
+                    async (user, userData, error) => {
+                        await this.handleAuthStateChangeSafely(user, userData, error);
                     }
-                    
-                    this.syncWithMobileMenu(userData || user);
-                    AuthHeaderState.isLoading = false;
-                    AuthHeaderState.hasError = false;
-                });
+                );
+                
+                this.authUnsubscribe = unsubscribe;
                 
             } catch (error) {
                 console.error('Error setupFirebaseManager:', error);
                 this.showErrorState('Connection failed');
             }
         },
+        
+        async handleAuthStateChangeSafely(user, userData, error) {
+            if (this.updateInProgress) {
+                console.log('🔒 Auth header update en cours, skipping...');
+                return;
+            }
+            
+            this.updateInProgress = true;
+            
+            try {
+                if (error) {
+                    console.error('❌ Erreur auth state:', error);
+                    this.showErrorState('Authentication error');
+                    return;
+                }
+                
+                if (user) {
+                    const validatedUserData = this.validateUserData(user, userData);
+                    await this.updateAuthenticatedUISafely(validatedUserData);
+                } else {
+                    this.showNotAuthenticatedState();
+                }
+                
+                this.syncWithMobileMenuSafely(userData || user);
+                
+                this.authState = 'ready';
+                
+            } catch (error) {
+                console.error('❌ Erreur handleAuthStateChangeSafely:', error);
+                this.showErrorState('UI update failed');
+            } finally {
+                this.updateInProgress = false;
+            }
+        },
+        
+        validateUserData: function(user, userData) {
+            if (!user) {
+                throw new Error('User object is required');
+            }
+            
+            const validUserData = userData || user;
+            
+            const validatedData = {
+                uid: user.uid,
+                email: user.email,
+                displayName: validUserData.displayName || user.displayName || 'Anonymous',
+                photoURL: validUserData.photoURL || user.photoURL,
+                profile: validUserData.profile || {
+                    isProfileComplete: true,
+                    displayPreference: 'realname',
+                    nationality: null
+                },
+                privacy: validUserData.privacy || {
+                    profileVisibility: 'public',
+                    showInLeaderboards: true
+                }
+            };
+            
+            return validatedData;
+        },
 
-        updateAuthenticatedUI: async function(userData) {
+        async updateAuthenticatedUISafely(userData) {
             try {
                 const desktopAuthButtons = document.getElementById('desktop-auth-buttons');
                 if (!desktopAuthButtons) {
@@ -364,44 +423,117 @@
                     return;
                 }
                 
-                const displayName = window.FirebaseManager.getDisplayName(userData);
-                const flag = window.FirebaseManager.getFlagEmoji(userData.profile?.nationality);
-                const isProfileComplete = window.FirebaseManager.isProfileComplete(userData);
+                const displayName = this.getDisplayNameSafely(userData);
+                const flag = this.getFlagEmojiSafely(userData.profile?.nationality);
+                const isProfileComplete = this.isProfileCompleteSafely(userData);
                 
                 const profileBadge = !isProfileComplete ? 
                     '<div class="profile-incomplete-badge" title="Complete your profile"></div>' : '';
                 
-                desktopAuthButtons.innerHTML = `
-                    <div class="user-menu">
-                        <div class="user-name" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false">
-                            <div class="user-info">
-                                ${flag ? `<span class="user-flag">${flag}</span>` : ''}
-                                <span class="user-display-name">${displayName}</span>
-                            </div>
-                            <span class="dropdown-arrow">▼</span>
-                            ${profileBadge}
-                        </div>
-                        <div class="dropdown-menu" role="menu">
-                            <a href="${window.FirebaseManager.getNavigationPath('profile')}" role="menuitem">
-                                <span class="dropdown-icon">👤</span>
-                                <span>My Profile</span>
-                            </a>
-                            <a href="${window.FirebaseManager.getNavigationPath('settings')}" role="menuitem">
-                                <span class="dropdown-icon">⚙️</span>
-                                <span>Settings</span>
-                            </a>
-                            <a href="#" class="sign-out" onclick="event.preventDefault(); AuthHeader.signOut();" role="menuitem">
-                                <span class="dropdown-icon">🚪</span>
-                                <span>Sign Out</span>
-                            </a>
-                        </div>
-                    </div>
-                `;
+                const template = this.createAuthUITemplate(displayName, flag, profileBadge);
+                desktopAuthButtons.innerHTML = template;
                 
                 this.setupDropdownAccessibility();
+                
             } catch (error) {
-                console.error('Error updateAuthenticatedUI:', error);
-                this.showErrorState('UI update failed');
+                console.error('❌ Erreur updateAuthenticatedUISafely:', error);
+                this.showNotAuthenticatedState();
+            }
+        },
+        
+        getDisplayNameSafely: function(userData) {
+            try {
+                if (window.FirebaseManager && window.FirebaseManager.getDisplayName) {
+                    return window.FirebaseManager.getDisplayName(userData);
+                }
+                
+                return userData?.displayName || userData?.email?.split('@')[0] || 'Anonymous';
+            } catch (error) {
+                console.warn('⚠️ Erreur getDisplayNameSafely:', error);
+                return 'Anonymous';
+            }
+        },
+        
+        getFlagEmojiSafely: function(nationality) {
+            try {
+                if (window.FirebaseManager && window.FirebaseManager.getFlagEmoji) {
+                    return window.FirebaseManager.getFlagEmoji(nationality);
+                }
+                return nationality ? '🌍' : '';
+            } catch (error) {
+                return '';
+            }
+        },
+        
+        isProfileCompleteSafely: function(userData) {
+            try {
+                if (window.FirebaseManager && window.FirebaseManager.isProfileComplete) {
+                    return window.FirebaseManager.isProfileComplete(userData);
+                }
+                return userData?.profile?.isProfileComplete === true;
+            } catch (error) {
+                return true;
+            }
+        },
+        
+        createAuthUITemplate: function(displayName, flag, profileBadge) {
+            const escapeHtml = (str) => {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            };
+            
+            const safeDisplayName = escapeHtml(displayName);
+            const safeFlag = flag || '';
+            
+            return `
+                <div class="user-menu">
+                    <div class="user-name" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false">
+                        <div class="user-info">
+                            ${safeFlag ? `<span class="user-flag">${safeFlag}</span>` : ''}
+                            <span class="user-display-name">${safeDisplayName}</span>
+                        </div>
+                        <span class="dropdown-arrow">▼</span>
+                        ${profileBadge}
+                    </div>
+                    <div class="dropdown-menu" role="menu">
+                        <a href="${this.getNavigationPathSafely('profile')}" role="menuitem">
+                            <span class="dropdown-icon">👤</span>
+                            <span>My Profile</span>
+                        </a>
+                        <a href="${this.getNavigationPathSafely('settings')}" role="menuitem">
+                            <span class="dropdown-icon">⚙️</span>
+                            <span>Settings</span>
+                        </a>
+                        <a href="#" class="sign-out" onclick="event.preventDefault(); AuthHeader.signOut();" role="menuitem">
+                            <span class="dropdown-icon">🚪</span>
+                            <span>Sign Out</span>
+                        </a>
+                    </div>
+                </div>
+            `;
+        },
+        
+        getNavigationPathSafely: function(page) {
+            try {
+                if (window.FirebaseManager && window.FirebaseManager.getNavigationPath) {
+                    return window.FirebaseManager.getNavigationPath(page);
+                }
+                return `../${page}/`;
+            } catch (error) {
+                console.warn('⚠️ Navigation path fallback:', error);
+                return '#';
+            }
+        },
+        
+        syncWithMobileMenuSafely: function(userData) {
+            try {
+                if (typeof window.MobileMenu !== 'undefined' && 
+                    typeof window.MobileMenu.syncWithAuthHeader === 'function') {
+                    window.MobileMenu.syncWithAuthHeader(userData);
+                }
+            } catch (error) {
+                console.warn('⚠️ Erreur sync MobileMenu (non critique):', error);
             }
         },
 
@@ -428,7 +560,6 @@
                 AuthHeaderState.isLoading = true;
                 AuthHeaderState.hasError = false;
                 
-                // État de chargement avec dimensions fixes pour éviter layout shift
                 desktopAuthButtons.innerHTML = `
                     <div class="auth-loading">
                         <div class="auth-loading-spinner"></div>
@@ -508,16 +639,6 @@
             }
         },
 
-        syncWithMobileMenu: function(userData) {
-            try {
-                if (typeof window.MobileMenu !== 'undefined' && window.MobileMenu.syncWithAuthHeader) {
-                    window.MobileMenu.syncWithAuthHeader(userData);
-                }
-            } catch (error) {
-                console.warn('Error sync MobileMenu:', error);
-            }
-        },
-
         setupDropdownAccessibility: function() {
             try {
                 const userNameBtn = document.querySelector('.user-name');
@@ -544,7 +665,7 @@
 
         updateAuthState: async function(user, userData) {
             if (user) {
-                await this.updateAuthenticatedUI(userData || user);
+                await this.updateAuthenticatedUISafely(userData || user);
             } else {
                 this.showNotAuthenticatedState();
             }
@@ -564,6 +685,13 @@
 
         hasError: function() {
             return AuthHeaderState.hasError;
+        },
+        
+        cleanup: function() {
+            if (this.authUnsubscribe) {
+                this.authUnsubscribe();
+                this.authUnsubscribe = null;
+            }
         }
     };
 

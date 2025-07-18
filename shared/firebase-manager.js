@@ -1,6 +1,6 @@
 // ============= SHARED/FIREBASE-MANAGER.JS - SINGLETON CENTRALISÉ =============
 // Solution complète pour éliminer les race conditions et unifier Firebase
-// VERSION CORRIGÉE avec signInWithRedirect et getRedirectResult ajoutés
+// VERSION FINALE CORRIGÉE avec signInWithRedirect et getRedirectResult + FIX uid
 
 (function() {
     'use strict';
@@ -241,15 +241,15 @@
                     db: this.db,
                     storage: this.storage,
                     
-                    // Auth methods - 🔧 CORRIGÉ: ajout de signInWithRedirect et getRedirectResult
+                    // Auth methods - signInWithRedirect et getRedirectResult inclus
                     onAuthStateChanged,
                     signOut,
                     updateProfile,
                     createUserWithEmailAndPassword,
                     signInWithEmailAndPassword,
                     signInWithPopup,
-                    signInWithRedirect,        // 🔧 AJOUTÉ
-                    getRedirectResult,         // 🔧 AJOUTÉ
+                    signInWithRedirect,        
+                    getRedirectResult,         
                     sendPasswordResetEmail,
                     googleProvider,
                     facebookProvider,
@@ -284,7 +284,7 @@
                 this.isLoading = false;
                 this.retryCount = 0;
                 
-                console.log('✅ Firebase Manager initialisé avec succès ! (avec signInWithRedirect)');
+                console.log('✅ Firebase Manager initialisé avec succès ! (avec signInWithRedirect et getRedirectResult)');
                 return this.firebaseAuth;
                 
             } catch (error) {
@@ -406,10 +406,17 @@
                 if (userDoc.exists()) {
                     userData = { ...user, ...userDoc.data() };
                 } else {
-                    // 🔧 NOUVEAU: Créer automatiquement le profil par défaut
-                    userData = { ...user, ...this.createDefaultProfile(user) };
-                    await this.firebaseAuth.setDoc(userRef, this.createDefaultProfile(user));
-                    console.log('✅ Profil par défaut créé pour:', user.email);
+                    // 🔧 CORRIGÉ: Créer automatiquement le profil par défaut avec uid
+                    console.log('🔧 Création profil par défaut pour:', user.email);
+                    const defaultProfile = this.createDefaultProfile(user);
+                    
+                    // Sauvegarder dans Firestore
+                    await this.firebaseAuth.setDoc(userRef, defaultProfile);
+                    
+                    // Combiner avec les données utilisateur Firebase
+                    userData = { ...user, ...defaultProfile };
+                    
+                    console.log('✅ Profil par défaut créé avec uid pour:', user.email);
                 }
                 
                 // Mettre en cache LRU
@@ -428,12 +435,13 @@
         }
 
         /**
-         * 🔧 NOUVEAU: Crée un profil par défaut pour un nouvel utilisateur
+         * 🔧 CORRIGÉ: Crée un profil par défaut pour un nouvel utilisateur
          * @param {Object} user - L'objet utilisateur Firebase
          * @returns {Object} - Le profil par défaut
          */
         createDefaultProfile(user) {
             return {
+                uid: user.uid,  // 🔧 ESSENTIEL : uid obligatoire pour les règles Firestore
                 displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
                 email: user.email,
                 profile: {
@@ -853,6 +861,6 @@
         console.log('  - window.firebaseManagerStats() pour stats cache');
     }
 
-    console.log('🔥 Firebase Manager Singleton ready - signInWithRedirect et getRedirectResult ajoutés ✅');
+    console.log('🔥 Firebase Manager Singleton ready - signInWithRedirect, getRedirectResult et FIX uid inclus ✅');
 
 })();

@@ -928,46 +928,67 @@
     <script src="../mobile/menu.js"></script>
 
     <script>
+        // ============= LEADERBOARD MANAGER V2 - THREAD-SAFE AVEC FIREBASE MANAGER V2 =============
+        
         const LeaderboardManager = {
+            // ============= STATE MANAGEMENT THREAD-SAFE =============
             currentUser: null,
             leaderboardData: [],
             currentRegion: 'global',
             currentLimit: 25,
+            firebaseManager: null,
             isLoading: false,
             lastVisibleDoc: null,
             hasMoreResults: true,
+            retryCount: 0,
+            maxRetries: 3,
+            isInitialized: false,
             
-            leaderboardCache: new Map(),
-            cacheTimeout: 2 * 60 * 1000,
+            // ============= INITIALIZATION THREAD-SAFE =============
             
             init: function() {
                 try {
-                    console.log('🏆 Initialisation LeaderboardManager avec Firebase Manager...');
+                    console.log('🏆 Initializing LeaderboardManager V2...');
                     
-                    this.setupFirebaseManager();
+                    this.setupFirebaseManagerV2();
                     this.setupEventListeners();
                     this.loadInitialData();
                     
-                    console.log('✅ LeaderboardManager initialisé');
+                    console.log('✅ LeaderboardManager V2 initialized with thread-safe patterns');
                     
                 } catch (error) {
-                    console.error('❌ Erreur initialisation LeaderboardManager:', error);
+                    console.error('❌ Error initializing LeaderboardManager V2:', error);
                     this.showError('Failed to initialize leaderboard');
                 }
             },
 
-            setupFirebaseManager: async function() {
+            // ✅ NOUVEAU PATTERN - Utilise getInstance() au lieu d'initialize()
+            setupFirebaseManagerV2: async function() {
                 try {
-                    await window.FirebaseManager.initialize();
+                    // ✅ Utiliser la nouvelle API thread-safe
+                    this.firebaseManager = await window.FirebaseManager.getInstance();
                     
-                    window.FirebaseManager.onAuthStateChanged((user, userData) => {
+                    // ✅ Utiliser la nouvelle API de callbacks
+                    this.firebaseManager.onAuthStateChanged((user, userData) => {
                         this.currentUser = user;
-                        console.log(user ? `👤 Utilisateur: ${user.email}` : '🚫 Non connecté');
+                        console.log(user ? `👤 User authenticated: ${user.email}` : '🚫 User not authenticated');
+                        
+                        // ✅ Synchronisation thread-safe avec AuthHeader et MobileMenu
+                        if (typeof window.AuthHeader !== 'undefined') {
+                            window.AuthHeader.updateAuthState(user, userData);
+                        }
+                        
+                        if (typeof window.MobileMenu !== 'undefined') {
+                            window.MobileMenu.syncWithAuthHeader(userData || user);
+                        }
                     });
                     
+                    this.isInitialized = true;
+                    console.log('✅ Firebase Manager V2 setup completed for leaderboard');
+                    
                 } catch (error) {
-                    console.error('❌ Erreur setupFirebaseManager:', error);
-                    this.showError('Firebase connection failed');
+                    console.error('❌ Error setupFirebaseManagerV2:', error);
+                    await this.handleRetryLogic(error);
                 }
             },
 
@@ -977,56 +998,57 @@
                         window.LoadingManager.show(document.getElementById('loading-container'), 'Loading leaderboard...');
                     }
                     
-                    await this.loadLeaderboardData();
-                    await this.loadGlobalStats();
+                    await this.loadLeaderboardDataV2();
+                    await this.loadGlobalStatsV2();
                     
                 } catch (error) {
-                    console.error('❌ Erreur loadInitialData:', error);
+                    console.error('❌ Error loadInitialData:', error);
                     this.showError('Failed to load initial data');
                 }
             },
 
-            loadLeaderboardData: async function(loadMore = false) {
+            // ✅ NOUVELLE MÉTHODE - Thread-safe leaderboard data loading
+            loadLeaderboardDataV2: async function(loadMore = false) {
                 if (this.isLoading) return;
                 
                 this.isLoading = true;
                 this.setLoadingState(true);
                 
                 try {
-                    const cacheKey = `${this.currentRegion}-${this.currentLimit}`;
-                    if (!loadMore && this.leaderboardCache.has(cacheKey)) {
-                        const cached = this.leaderboardCache.get(cacheKey);
-                        const age = Date.now() - cached.timestamp;
+                    // ✅ Utiliser getCachedData() du FirebaseManager pour cache thread-safe
+                    const cacheKey = `leaderboard-${this.currentRegion}-${this.currentLimit}`;
+                    
+                    if (!loadMore) {
+                        const cachedData = await this.firebaseManager.getCachedData(
+                            cacheKey,
+                            () => this.fetchLeaderboardDataV2(),
+                            { ttl: 2 * 60 * 1000 } // 2 minutes TTL
+                        );
                         
-                        if (age < this.cacheTimeout) {
-                            console.log('📋 Utilisation cache leaderboard');
-                            this.displayLeaderboard(cached.data);
+                        if (cachedData && cachedData.length > 0) {
+                            this.leaderboardData = cachedData;
+                            this.displayLeaderboard(cachedData);
                             this.setLoadingState(false);
                             this.isLoading = false;
+                            console.log('📋 Using cached leaderboard data');
                             return;
                         }
                     }
 
-                    const data = await this.fetchLeaderboardFromFirebase();
+                    // Fetch fresh data
+                    const data = await this.fetchLeaderboardDataV2();
                     
                     if (data && data.length > 0) {
                         this.leaderboardData = loadMore ? [...this.leaderboardData, ...data] : data;
                         this.displayLeaderboard(this.leaderboardData);
                         
-                        if (!loadMore) {
-                            this.leaderboardCache.set(cacheKey, {
-                                data: data,
-                                timestamp: Date.now()
-                            });
-                        }
-                        
-                        console.log(`✅ Leaderboard chargé: ${data.length} joueurs`);
+                        console.log(`✅ Leaderboard loaded: ${data.length} players`);
                     } else {
                         this.showEmptyState();
                     }
                     
                 } catch (error) {
-                    console.error('❌ Erreur loadLeaderboardData:', error);
+                    console.error('❌ Error loadLeaderboardDataV2:', error);
                     this.showError('Failed to load leaderboard data');
                 } finally {
                     this.setLoadingState(false);
@@ -1034,86 +1056,70 @@
                 }
             },
 
-            // 🔧 FONCTION CORRIGÉE - Évite les index composites complexes
-            fetchLeaderboardFromFirebase: async function() {
+            // ✅ NOUVELLE MÉTHODE - Utilise queryCollection() thread-safe du FirebaseManager
+            fetchLeaderboardDataV2: async function() {
                 try {
-                    const firebase = await window.FirebaseManager.initialize();
-                    if (!firebase) {
-                        throw new Error('Firebase non disponible');
+                    if (!this.firebaseManager) {
+                        throw new Error('Firebase Manager not available');
                     }
 
-                    console.log('🔍 Chargement leaderboard depuis Firestore...');
+                    console.log('🔍 Fetching leaderboard with thread-safe API...');
 
-                    // ✅ STRATÉGIE SIMPLIFIÉE: Éviter les index composites complexes
-                    let leaderboardQuery;
-
-                    if (this.currentRegion === 'global') {
-                        // Requête globale simplifiée - évite l'index composite
-                        leaderboardQuery = firebase.query(
-                            firebase.collection(firebase.db, 'users'),
-                            firebase.where('privacy.showInLeaderboards', '==', true),
-                            firebase.orderBy('improvedStats.ranked.currentRating', 'desc'),
-                            firebase.limit(this.currentLimit)
-                        );
-                    } else {
-                        // Requête régionale simplifiée
-                        leaderboardQuery = firebase.query(
-                            firebase.collection(firebase.db, 'users'),
-                            firebase.where('privacy.showInLeaderboards', '==', true),
-                            firebase.where('profile.nationality', '==', this.currentRegion),
-                            firebase.orderBy('improvedStats.ranked.currentRating', 'desc'),
-                            firebase.limit(this.currentLimit)
-                        );
-                    }
-
-                    if (this.lastVisibleDoc) {
-                        leaderboardQuery = firebase.query(
-                            leaderboardQuery,
-                            firebase.startAfter(this.lastVisibleDoc)
-                        );
-                    }
-
-                    const querySnapshot = await firebase.getDocs(leaderboardQuery);
+                    // ✅ Utiliser la nouvelle API queryCollection() thread-safe
+                    const whereConditions = [
+                        ['privacy.showInLeaderboards', '==', true]
+                    ];
                     
-                    if (querySnapshot.empty) {
+                    // ✅ Éviter les index composites complexes - ajouter région séparément
+                    if (this.currentRegion !== 'global') {
+                        whereConditions.push(['profile.nationality', '==', this.currentRegion]);
+                    }
+
+                    const leaderboardData = await this.firebaseManager.queryCollection('users', {
+                        where: whereConditions,
+                        orderBy: ['improvedStats.ranked.currentRating', 'desc'],
+                        limit: this.currentLimit,
+                        useCache: true,
+                        cacheTTL: 2 * 60 * 1000
+                    });
+
+                    if (!leaderboardData || leaderboardData.length === 0) {
                         this.hasMoreResults = false;
                         return [];
                     }
 
-                    this.lastVisibleDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
-                    this.hasMoreResults = querySnapshot.docs.length === this.currentLimit;
+                    this.hasMoreResults = leaderboardData.length === this.currentLimit;
 
-                    const players = [];
-                    querySnapshot.docs.forEach((doc, index) => {
-                        const userData = doc.data();
-                        
-                        // ✅ FILTRAGE CÔTÉ CLIENT pour totalGames > 0
-                        // Cela évite le besoin d'un index composite complexe
+                    // ✅ Filtrage côté client pour éviter les index composites complexes
+                    const qualifiedPlayers = [];
+                    leaderboardData.forEach((userData, index) => {
+                        // Filtrer côté client pour totalGames > 0
                         if (userData.improvedStats?.totalGames > 0) {
-                            const player = this.processPlayerData(userData, index + 1);
+                            const player = this.processPlayerDataV2(userData, index + 1);
                             if (player) {
-                                players.push(player);
+                                qualifiedPlayers.push(player);
                             }
                         }
                     });
 
-                    console.log(`✅ Données chargées: ${players.length} joueurs qualifiés`);
-                    return players;
+                    console.log(`✅ Data processed: ${qualifiedPlayers.length} qualified players`);
+                    return qualifiedPlayers;
                     
                 } catch (error) {
-                    console.error('❌ Erreur fetchLeaderboardFromFirebase:', error);
+                    console.error('❌ Error fetchLeaderboardDataV2:', error);
                     
-                    // Fallback vers données exemple en cas d'erreur
+                    // ✅ Fallback robuste vers données exemple
                     if (this.leaderboardData.length === 0) {
-                        console.log('📋 Utilisation données exemple en fallback');
-                        return this.getFallbackData();
+                        console.log('📋 Using fallback data');
+                        return this.getFallbackDataV2();
                     }
                     
                     throw error;
                 }
             },
 
-            processPlayerData: function(userData, baseRank) {
+            // ✅ NOUVELLE MÉTHODE - Thread-safe player data processing
+            processPlayerDataV2: function(userData, baseRank) {
                 try {
                     if (!userData || !userData.improvedStats) return null;
 
@@ -1123,24 +1129,24 @@
                     return {
                         rank: this.leaderboardData.length + baseRank,
                         userId: userData.uid,
-                        displayName: this.getDisplayName(userData),
-                        level: this.getPlayerLevel(stats.ranked?.currentRating || 0),
+                        displayName: this.firebaseManager.getDisplayName(userData),
+                        level: this.getPlayerLevelV2(stats.ranked?.currentRating || 0),
                         rankingPoints: stats.ranked?.currentRating || 0,
                         totalGames: stats.totalGames || 0,
-                        winRate: this.calculateWinRate(stats),
+                        winRate: this.calculateWinRateV2(stats),
                         currentStreak: stats.ranked?.winStreak || 0,
-                        perfectGames: this.calculatePerfectGames(stats),
+                        perfectGames: this.calculatePerfectGamesV2(stats),
                         nationality: profile.nationality || null,
                         isCurrentUser: this.currentUser && userData.uid === this.currentUser.uid
                     };
                     
                 } catch (error) {
-                    console.error('❌ Erreur processPlayerData:', error);
+                    console.error('❌ Error processPlayerDataV2:', error);
                     return null;
                 }
             },
 
-            calculateWinRate: function(improvedStats) {
+            calculateWinRateV2: function(improvedStats) {
                 try {
                     const totalWins = (improvedStats.practice?.gamesCompleted || 0) + (improvedStats.ranked?.gamesCompleted || 0);
                     const totalGames = improvedStats.totalGames || 0;
@@ -1150,56 +1156,53 @@
                 }
             },
 
-            calculatePerfectGames: function(improvedStats) {
+            calculatePerfectGamesV2: function(improvedStats) {
                 try {
                     const completedGames = (improvedStats.practice?.gamesCompleted || 0) + (improvedStats.ranked?.gamesCompleted || 0);
-                    return Math.floor(completedGames * 0.15);
+                    return Math.floor(completedGames * 0.15); // Estimation
                 } catch (error) {
                     return 0;
                 }
             },
 
-            loadGlobalStats: async function() {
+            // ✅ NOUVELLE MÉTHODE - Thread-safe global stats loading
+            loadGlobalStatsV2: async function() {
                 try {
                     if (this.leaderboardData.length > 0) {
-                        this.updateGlobalStats(this.leaderboardData);
+                        this.updateGlobalStatsV2(this.leaderboardData);
                         return;
                     }
 
-                    const firebase = await window.FirebaseManager.initialize();
-                    if (firebase) {
-                        const stats = await this.fetchGlobalStatsFromFirebase();
-                        this.updateGlobalStatsFromFirebase(stats);
+                    if (this.firebaseManager) {
+                        const stats = await this.fetchGlobalStatsV2();
+                        this.updateGlobalStatsFromFirebaseV2(stats);
                     } else {
-                        this.updateGlobalStats([]);
+                        this.updateGlobalStatsV2([]);
                     }
                     
                 } catch (error) {
-                    console.error('❌ Erreur loadGlobalStats:', error);
-                    this.updateGlobalStats([]);
+                    console.error('❌ Error loadGlobalStatsV2:', error);
+                    this.updateGlobalStatsV2([]);
                 }
             },
 
-            fetchGlobalStatsFromFirebase: async function() {
+            // ✅ NOUVELLE MÉTHODE - Thread-safe global stats fetching
+            fetchGlobalStatsV2: async function() {
                 try {
-                    const firebase = await window.FirebaseManager.initialize();
-                    
-                    // Requête simplifiée pour les stats globales
-                    const usersQuery = firebase.query(
-                        firebase.collection(firebase.db, 'users'),
-                        firebase.where('privacy.showInLeaderboards', '==', true),
-                        firebase.limit(100) // Limitation pour les stats
-                    );
-                    
-                    const querySnapshot = await firebase.getDocs(usersQuery);
+                    // ✅ Utiliser queryCollection() avec cache pour les stats globales
+                    const usersData = await this.firebaseManager.queryCollection('users', {
+                        where: [['privacy.showInLeaderboards', '==', true]],
+                        limit: 100, // Limitation pour les stats
+                        useCache: true,
+                        cacheTTL: 5 * 60 * 1000 // 5 minutes pour les stats globales
+                    });
                     
                     let totalPlayers = 0;
                     let totalGames = 0;
                     let totalScore = 0;
                     let maxStreak = 0;
                     
-                    querySnapshot.docs.forEach(doc => {
-                        const userData = doc.data();
+                    usersData.forEach(userData => {
                         const stats = userData.improvedStats || {};
                         
                         // Filtrage côté client
@@ -1223,10 +1226,47 @@
                     };
                     
                 } catch (error) {
-                    console.error('❌ Erreur fetchGlobalStatsFromFirebase:', error);
+                    console.error('❌ Error fetchGlobalStatsV2:', error);
                     return null;
                 }
             },
+
+            updateGlobalStatsV2: function(data) {
+                try {
+                    if (!data || data.length === 0) {
+                        document.getElementById('total-players').textContent = '0';
+                        document.getElementById('total-games').textContent = '0';
+                        document.getElementById('avg-score').textContent = '0';
+                        document.getElementById('top-streak').textContent = '0';
+                        return;
+                    }
+                    
+                    const totalPlayers = data.length;
+                    const totalGames = data.reduce((sum, player) => sum + player.totalGames, 0);
+                    const totalPoints = data.reduce((sum, player) => sum + player.rankingPoints, 0);
+                    const avgScore = totalPlayers > 0 ? Math.round(totalPoints / totalPlayers) : 0;
+                    const topStreak = Math.max(...data.map(player => player.currentStreak || 0));
+                    
+                    document.getElementById('total-players').textContent = this.formatNumber(totalPlayers);
+                    document.getElementById('total-games').textContent = this.formatNumber(totalGames);
+                    document.getElementById('avg-score').textContent = this.formatNumber(avgScore);
+                    document.getElementById('top-streak').textContent = topStreak;
+                    
+                } catch (error) {
+                    console.error('❌ Error updateGlobalStatsV2:', error);
+                }
+            },
+
+            updateGlobalStatsFromFirebaseV2: function(stats) {
+                if (!stats) return;
+                
+                document.getElementById('total-players').textContent = this.formatNumber(stats.totalPlayers);
+                document.getElementById('total-games').textContent = this.formatNumber(stats.totalGames);
+                document.getElementById('avg-score').textContent = this.formatNumber(stats.averageScore);
+                document.getElementById('top-streak').textContent = stats.maxStreak;
+            },
+
+            // ============= UI MANAGEMENT =============
 
             displayLeaderboard: function(data) {
                 try {
@@ -1247,20 +1287,20 @@
                     tbody.innerHTML = '';
                     
                     data.forEach((player) => {
-                        const row = this.createPlayerRow(player);
+                        const row = this.createPlayerRowV2(player);
                         tbody.appendChild(row);
                     });
                     
                     this.updatePagination();
-                    console.log(`✅ Leaderboard affiché: ${data.length} joueurs`);
+                    console.log(`✅ Leaderboard displayed: ${data.length} players`);
                     
                 } catch (error) {
-                    console.error('❌ Erreur displayLeaderboard:', error);
+                    console.error('❌ Error displayLeaderboard:', error);
                     this.showError('Error displaying leaderboard');
                 }
             },
 
-            createPlayerRow: function(player) {
+            createPlayerRowV2: function(player) {
                 const row = document.createElement('tr');
                 
                 if (player.isCurrentUser) {
@@ -1278,7 +1318,7 @@
                             <div class="player-info">
                                 <div class="player-name">
                                     ${player.displayName}
-                                    ${player.nationality ? this.getFlagEmoji(player.nationality) : ''}
+                                    ${player.nationality ? this.firebaseManager.getFlagEmoji(player.nationality) : ''}
                                     ${player.isCurrentUser ? '<span style="color: #007aff; font-size: 12px;">YOU</span>' : ''}
                                 </div>
                                 <div class="player-level" style="background: ${player.level.color};">
@@ -1302,41 +1342,6 @@
                 return row;
             },
 
-            updateGlobalStats: function(data) {
-                try {
-                    if (!data || data.length === 0) {
-                        document.getElementById('total-players').textContent = '0';
-                        document.getElementById('total-games').textContent = '0';
-                        document.getElementById('avg-score').textContent = '0';
-                        document.getElementById('top-streak').textContent = '0';
-                        return;
-                    }
-                    
-                    const totalPlayers = data.length;
-                    const totalGames = data.reduce((sum, player) => sum + player.totalGames, 0);
-                    const totalPoints = data.reduce((sum, player) => sum + player.rankingPoints, 0);
-                    const avgScore = totalPlayers > 0 ? Math.round(totalPoints / totalPlayers) : 0;
-                    const topStreak = Math.max(...data.map(player => player.currentStreak || 0));
-                    
-                    document.getElementById('total-players').textContent = this.formatNumber(totalPlayers);
-                    document.getElementById('total-games').textContent = this.formatNumber(totalGames);
-                    document.getElementById('avg-score').textContent = this.formatNumber(avgScore);
-                    document.getElementById('top-streak').textContent = topStreak;
-                    
-                } catch (error) {
-                    console.error('❌ Erreur updateGlobalStats:', error);
-                }
-            },
-
-            updateGlobalStatsFromFirebase: function(stats) {
-                if (!stats) return;
-                
-                document.getElementById('total-players').textContent = this.formatNumber(stats.totalPlayers);
-                document.getElementById('total-games').textContent = this.formatNumber(stats.totalGames);
-                document.getElementById('avg-score').textContent = this.formatNumber(stats.averageScore);
-                document.getElementById('top-streak').textContent = stats.maxStreak;
-            },
-
             setupEventListeners: function() {
                 try {
                     const regionFilter = document.getElementById('region-filter');
@@ -1346,7 +1351,7 @@
                         regionFilter.addEventListener('change', (e) => {
                             this.currentRegion = e.target.value;
                             this.resetPagination();
-                            this.loadLeaderboardData();
+                            this.loadLeaderboardDataV2();
                         });
                     }
                     
@@ -1354,24 +1359,50 @@
                         limitFilter.addEventListener('change', (e) => {
                             this.currentLimit = parseInt(e.target.value);
                             this.resetPagination();
-                            this.loadLeaderboardData();
+                            this.loadLeaderboardDataV2();
                         });
                     }
                     
                 } catch (error) {
-                    console.error('❌ Erreur setupEventListeners:', error);
+                    console.error('❌ Error setupEventListeners:', error);
                 }
             },
 
+            // ============= RETRY LOGIC =============
+
+            async handleRetryLogic(error) {
+                if (this.retryCount < this.maxRetries) {
+                    this.retryCount++;
+                    const delay = Math.min(1000 * Math.pow(2, this.retryCount), 10000);
+                    
+                    console.log(`🔄 Retrying LeaderboardManager operation (${this.retryCount}/${this.maxRetries}) in ${delay}ms`);
+                    
+                    setTimeout(async () => {
+                        try {
+                            await this.setupFirebaseManagerV2();
+                        } catch (retryError) {
+                            console.error('❌ Retry failed:', retryError);
+                            if (this.retryCount >= this.maxRetries) {
+                                this.showError('Max retries reached');
+                            }
+                        }
+                    }, delay);
+                } else {
+                    console.error('❌ Max retries reached for LeaderboardManager');
+                    this.showError('Connection failed');
+                }
+            },
+
+            // ============= UTILITY METHODS =============
+
             refreshLeaderboard: function() {
-                this.leaderboardCache.clear();
                 this.resetPagination();
-                this.loadLeaderboardData();
+                this.loadLeaderboardDataV2();
             },
 
             loadMoreResults: function() {
                 if (this.hasMoreResults && !this.isLoading) {
-                    this.loadLeaderboardData(true);
+                    this.loadLeaderboardDataV2(true);
                 }
             },
 
@@ -1428,24 +1459,7 @@
                 }
             },
 
-            getDisplayName: function(userData) {
-                if (window.FirebaseManager && window.FirebaseManager.getDisplayName) {
-                    return window.FirebaseManager.getDisplayName(userData);
-                }
-                return userData.displayName || userData.email?.split('@')[0] || 'Anonymous';
-            },
-
-            getFlagEmoji: function(countryCode) {
-                if (window.FirebaseManager && window.FirebaseManager.getFlagEmoji) {
-                    return window.FirebaseManager.getFlagEmoji(countryCode);
-                }
-                const flags = {
-                    'FR': '🇫🇷', 'US': '🇺🇸', 'GB': '🇬🇧', 'DE': '🇩🇪', 'ES': '🇪🇸', 'IT': '🇮🇹'
-                };
-                return flags[countryCode] || '🌍';
-            },
-
-            getPlayerLevel: function(points) {
+            getPlayerLevelV2: function(points) {
                 if (points < 1000) return { name: 'Beginner', icon: '🟢', color: '#8e8e93' };
                 if (points < 5000) return { name: 'Novice', icon: '🟡', color: '#34c759' };
                 if (points < 15000) return { name: 'Intermediate', icon: '🟠', color: '#007aff' };
@@ -1467,13 +1481,14 @@
                 return num.toString();
             },
 
-            getFallbackData: function() {
+            // ✅ FALLBACK ROBUSTE
+            getFallbackDataV2: function() {
                 return [
                     {
                         rank: 1,
                         userId: 'demo1',
                         displayName: 'SudokuMaster',
-                        level: this.getPlayerLevel(95000),
+                        level: this.getPlayerLevelV2(95000),
                         rankingPoints: 95000,
                         totalGames: 1250,
                         winRate: 92,
@@ -1486,7 +1501,7 @@
                         rank: 2,
                         userId: 'demo2',
                         displayName: 'PuzzleWizard',
-                        level: this.getPlayerLevel(87500),
+                        level: this.getPlayerLevelV2(87500),
                         rankingPoints: 87500,
                         totalGames: 1100,
                         winRate: 89,
@@ -1499,7 +1514,7 @@
                         rank: 3,
                         userId: 'demo3',
                         displayName: 'NumberNinja',
-                        level: this.getPlayerLevel(82000),
+                        level: this.getPlayerLevelV2(82000),
                         rankingPoints: 82000,
                         totalGames: 980,
                         winRate: 85,
@@ -1512,26 +1527,20 @@
             }
         };
 
+        // ============= INITIALIZATION =============
+
         document.addEventListener('DOMContentLoaded', function() {
             try {
-                window.FirebaseManager.onAuthStateChanged((user, userData) => {
-                    if (typeof window.AuthHeader !== 'undefined') {
-                        window.AuthHeader.updateAuthState(user, userData);
-                    }
-                    
-                    if (typeof window.MobileMenu !== 'undefined') {
-                        window.MobileMenu.syncWithAuthHeader(userData || user);
-                    }
-                });
-                
                 LeaderboardManager.init();
-                console.log('✅ Page leaderboard initialisée');
+                console.log('✅ Leaderboard page V2 initialized with thread-safe patterns');
             } catch (error) {
-                console.error('❌ Erreur initialisation page leaderboard:', error);
+                console.error('❌ Error initializing leaderboard page V2:', error);
             }
         });
 
         window.LeaderboardManager = LeaderboardManager;
+        
+        console.log('✅ Leaderboard page V2 loaded - Thread-safe with FirebaseManager V2');
     </script>
 </body>
 </html>

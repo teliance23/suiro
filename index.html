@@ -10,6 +10,118 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- CSS CRITIQUE ANTI-FOUC -->
+    <style>
+        /* CSS critique pour éviter FOUC */
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+            background-color: #f2f2f7;
+            color: #000;
+            line-height: 1;
+            min-height: 100vh;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Dimensions fixes pour éviter layout shifts */
+        .header { 
+            min-height: 80px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 16px 24px 20px 24px;
+            background-color: #fff;
+            position: relative;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .auth-buttons { 
+            min-width: 120px; 
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .game-info { 
+            min-height: 72px;
+            display: flex;
+            align-items: center;
+            padding: 16px 24px;
+            background-color: #fff;
+            margin: 0 0 24px 0;
+            border-bottom: 0.5px solid #e5e5ea;
+            width: 100%;
+            gap: 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            border-radius: 0;
+            justify-content: center;
+        }
+        
+        .sudoku-wrapper { 
+            width: 420px; 
+            min-height: 420px;
+            flex: 0 0 auto;
+        }
+        
+        .sudoku-grid { 
+            min-height: 414px;
+            background-color: #484848;
+            border: 3px solid #484848;
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            grid-template-rows: repeat(9, 1fr);
+            gap: 2px;
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 0;
+            padding: 2px;
+        }
+
+        .game-container {
+            display: flex;
+            gap: 32px;
+            padding: 0;
+            max-width: fit-content;
+            margin: 0 auto;
+            align-items: flex-start;
+        }
+
+        @media (max-width: 768px) {
+            .header { display: none; }
+            .sudoku-wrapper { 
+                width: min(85vw, 420px); 
+                min-height: min(85vw, 420px); 
+            }
+            .game-container {
+                flex-direction: column;
+                align-items: center;
+                padding: 0 16px;
+                margin: 0 auto;
+                margin-top: 0;
+            }
+            .game-info {
+                margin: 0 auto 20px auto;
+                border-radius: 12px;
+                padding: 12px 16px;
+                position: relative;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .sudoku-wrapper { 
+                width: min(92vw, 340px); 
+                min-height: min(92vw, 340px); 
+            }
+            .game-info {
+                margin-bottom: 6px;
+                padding: 8px 12px;
+            }
+        }
+    </style>
+    
     <link rel="stylesheet" href="style.css">
     
     <!-- Fallback pour utilisateurs sans JavaScript (Fix Bug #10) -->
@@ -55,6 +167,9 @@
     </noscript>
 </head>
 <body>
+    <!-- ANTI-FOUC: Masquer jusqu'au chargement complet -->
+    <script>document.body.style.visibility='hidden';</script>
+
     <div class="main-content">
         <!-- Error Modal -->
         <div class="error-modal" id="error-modal">
@@ -354,7 +469,15 @@
             });
             
             console.log('✅ Page d\'accueil initialisée avec Firebase Manager');
+            
+            // RÉVÉLER LA PAGE une fois tout prêt
+            setTimeout(() => {
+                document.body.style.visibility = 'visible';
+            }, 800);
         });
     </script>
+    
+    <!-- Révélation pour utilisateurs sans JavaScript -->
+    <noscript><style>body{visibility:visible!important;}</style></noscript>
 </body>
 </html>

@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Suirodoku.com</title>
     
-    <!-- FAVICON - Chemins uniformisés (Fix Bug #3) -->
+    <!-- FAVICON - Chemins uniformisés -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- CSS CRITIQUE ANTI-FOUC -->
+    <!-- 🔧 FIX: CSS CRITIQUE OPTIMISÉ SANS FLASH -->
     <style>
-        /* CSS critique pour éviter FOUC */
+        /* CSS critique pour éviter FOUC SANS masquage total */
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
             background-color: #f2f2f7;
@@ -23,6 +23,14 @@
             overflow-x: hidden;
             margin: 0;
             padding: 0;
+            /* 🔧 FIX: Opacity légèrement réduite au lieu de visibility hidden */
+            opacity: 0.9;
+            transition: opacity 0.2s ease;
+        }
+
+        /* 🔧 FIX: Classe pour révéler la page de façon fluide */
+        body.page-ready {
+            opacity: 1;
         }
 
         /* Dimensions fixes pour éviter layout shifts */
@@ -160,7 +168,7 @@
     
     <link rel="stylesheet" href="style.css">
     
-    <!-- Fallback pour utilisateurs sans JavaScript (Fix Bug #10) -->
+    <!-- Fallback pour utilisateurs sans JavaScript -->
     <noscript>
         <style>
             .no-js-warning {
@@ -203,9 +211,6 @@
     </noscript>
 </head>
 <body>
-    <!-- ANTI-FOUC: Masquer jusqu'au chargement complet -->
-    <script>document.body.style.visibility='hidden';</script>
-
     <div class="main-content">
         <!-- Error Modal -->
         <div class="error-modal" id="error-modal">
@@ -488,8 +493,15 @@
     <script src="mobile/menu.js"></script>
     <script src="script.js"></script>
     
-    <!-- Initialisation SÉCURISÉE avec vérification -->
+    <!-- 🔧 FIX: Initialisation OPTIMISÉE sans masquage brutal -->
     <script>
+        // 🔧 FIX: Révélation fluide de la page sans attente forcée
+        function revealPageSmoothly() {
+            // Ajout de la classe pour révéler la page
+            document.body.classList.add('page-ready');
+            console.log('👁️ Page révélée de façon fluide');
+        }
+
         // Fonction pour attendre que FirebaseManager soit disponible
         function waitForFirebaseManager() {
             return new Promise((resolve) => {
@@ -500,14 +512,17 @@
                     console.log('⏳ En attente de FirebaseManager...');
                     setTimeout(() => {
                         waitForFirebaseManager().then(resolve);
-                    }, 100);
+                    }, 50); // 🔧 FIX: Réduit à 50ms pour plus de fluidité
                 }
             });
         }
 
-        // Initialisation sécurisée
+        // Initialisation optimisée
         document.addEventListener('DOMContentLoaded', async function() {
             try {
+                // 🔧 FIX: Révélation immédiate dès le DOM ready
+                setTimeout(revealPageSmoothly, 100); // Révélation très rapide
+                
                 // Attendre que FirebaseManager soit disponible
                 await waitForFirebaseManager();
                 
@@ -528,17 +543,13 @@
                 
             } catch (error) {
                 console.error('❌ Erreur initialisation:', error);
-            } finally {
-                // RÉVÉLER LA PAGE une fois tout prêt (même en cas d'erreur)
-                setTimeout(() => {
-                    document.body.style.visibility = 'visible';
-                    console.log('👁️ Page révélée');
-                }, 800);
+                // 🔧 FIX: Révéler la page même en cas d'erreur
+                revealPageSmoothly();
             }
         });
     </script>
     
     <!-- Révélation pour utilisateurs sans JavaScript -->
-    <noscript><style>body{visibility:visible!important;}</style></noscript>
+    <noscript><style>body{opacity:1!important;}</style></noscript>
 </body>
 </html>

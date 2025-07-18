@@ -1,11 +1,6 @@
-// ============= SHARED/FIREBASE-MANAGER.JS - SINGLETON CENTRALISÉ CORRIGÉ =============
-// Solution complète pour éliminer les race conditions et unifier Firebase
-// VERSION FINALE CORRIGÉE avec signInWithRedirect et getRedirectResult + FIX uid + CSP OPTIMISÉ + COOP
-
 (function() {
     'use strict';
 
-    // ============= LRU CACHE IMPLEMENTATION (Fix Bug #4) =============
     class LRUCache {
         constructor(maxSize = 50) {
             this.maxSize = maxSize;
@@ -15,7 +10,6 @@
         get(key) {
             if (this.cache.has(key)) {
                 const value = this.cache.get(key);
-                // Réorganiser pour LRU
                 this.cache.delete(key);
                 this.cache.set(key, value);
                 return value;
@@ -27,7 +21,6 @@
             if (this.cache.has(key)) {
                 this.cache.delete(key);
             } else if (this.cache.size >= this.maxSize) {
-                // Supprimer le plus ancien
                 const firstKey = this.cache.keys().next().value;
                 this.cache.delete(firstKey);
             }
@@ -47,7 +40,6 @@
         }
     }
 
-    // ============= LOADING COMPONENT UNIFORME (Fix Bug #5) =============
     window.LoadingManager = {
         show: function(container, message = 'Loading...') {
             if (!container) return;
@@ -86,7 +78,6 @@
         }
     };
 
-    // Injecter CSS spinner si pas déjà fait
     if (!document.getElementById('universal-loading-styles')) {
         const style = document.createElement('style');
         style.id = 'universal-loading-styles';
@@ -99,72 +90,58 @@
         document.head.appendChild(style);
     }
 
-    // ============= CLASSE FIREBASE MANAGER SINGLETON =============
     class FirebaseManager {
         constructor() {
-            // État de l'initialisation
+            this.authState = 'initializing';
+            this.authMutex = false;
+            this.userDataLoadingPromise = null;
+            this.authUnsubscribe = null;
+            
             this.initialized = false;
             this.initPromise = null;
             this.isLoading = false;
             this.hasError = false;
             this.retryCount = 0;
             
-            // Configuration unifiée (Fix Bug #2 - Timeouts cohérents)
             this.config = {
-                timeout: 8000,        // UNIFIÉ : 8 secondes pour tous (plus sûr)
-                maxRetries: 3,        // Réduit à 3 pour éviter les boucles
-                retryDelay: 1000,     // 1 seconde entre retries
+                timeout: 8000,
+                maxRetries: 3,
+                retryDelay: 1000,
                 enableDebug: false
             };
             
-            // Firebase objects
             this.firebaseAuth = null;
             this.app = null;
             this.auth = null;
             this.db = null;
             this.storage = null;
             
-            // État d'authentification centralisé
             this.currentUser = null;
             this.userData = null;
             this.authCallbacks = [];
             
-            // Cache centralisé avec LRU (Fix Bug #4)
             this.userDataCache = new LRUCache(50);
-            this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
+            this.cacheTimeout = 5 * 60 * 1000;
             
             console.log('🔥 Firebase Manager Singleton créé - Cache LRU activé');
         }
 
-        // ============= INITIALISATION CENTRALISÉE =============
-        
-        /**
-         * Point d'entrée unique pour initialiser Firebase
-         * @returns {Promise<Object|null>} L'objet Firebase ou null
-         */
         async initialize() {
-            // Si déjà initialisé, retourner immédiatement
             if (this.initialized && this.firebaseAuth) {
                 console.log('🔥 Firebase déjà initialisé - utilisation du singleton');
                 return this.firebaseAuth;
             }
             
-            // Si initialisation en cours, attendre la promesse existante
             if (this.initPromise) {
                 console.log('🔥 Firebase en cours d\'initialisation - attente...');
                 return this.initPromise;
             }
             
-            // Démarrer nouvelle initialisation
             console.log('🔥 Démarrage initialisation Firebase...');
             this.initPromise = this._loadFirebase();
             return this.initPromise;
         }
 
-        /**
-         * Charge Firebase avec gestion d'erreurs robuste
-         * @private
-         */
         async _loadFirebase() {
             this.isLoading = true;
             this.hasError = false;
@@ -172,7 +149,6 @@
             try {
                 console.log('🔥 Chargement modules Firebase...');
                 
-                // 🔧 FIX CRITIQUE: Configuration Firebase avec optimisations CSP
                 const firebaseConfig = {
                     apiKey: "AIzaSyD-0wrtBrV-RyZVtjz6cZgumvsoRIJ07b",
                     authDomain: "suirodoku-web.firebaseapp.com",
@@ -183,7 +159,6 @@
                     measurementId: "G-RPJXTCGLZN"
                 };
                 
-                // Import dynamique avec timeout unifié
                 const importPromises = [
                     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js'),
                     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js'),
@@ -191,7 +166,6 @@
                     import('https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js')
                 ];
                 
-                // Timeout unifié plus long pour plus de stabilité
                 const timeoutPromise = new Promise((_, reject) => 
                     setTimeout(() => reject(new Error('Firebase timeout')), this.config.timeout)
                 );
@@ -208,10 +182,8 @@
                     { getStorage, ref, uploadBytes, getDownloadURL }
                 ] = await Promise.race([Promise.all(importPromises), timeoutPromise]);
 
-                // Initialiser Firebase avec settings optimisés pour CSP
                 this.app = initializeApp(firebaseConfig);
                 
-                // 🔧 FIX CRITIQUE: Simplification Auth pour éviter les erreurs
                 console.log('🔧 Configuration Auth simplifiée et robuste...');
                 this.auth = getAuth(this.app);
                 console.log('✅ Auth initialisé avec configuration standard');
@@ -219,15 +191,13 @@
                 this.db = getFirestore(this.app);
                 this.storage = getStorage(this.app);
 
-                // 🔧 FIX CRITIQUE: Configuration Firestore optionnelle
                 try {
-                    // Tentative de configuration avancée Firestore
                     if (this.db._delegate?.settings) {
                         this.db._delegate.settings({
                             experimentalForceLongPolling: false,
                             experimentalAutoDetectLongPolling: false,
                             ssl: true,
-                            cacheSizeBytes: 10485760, // 10MB cache
+                            cacheSizeBytes: 10485760,
                         });
                         console.log('✅ Firestore configuré avec settings avancés');
                     } else {
@@ -237,7 +207,6 @@
                     console.warn('⚠️ Settings Firestore non appliqués (pas critique):', error.code);
                 }
 
-                // Configuration des providers avec gestion d'erreur et optimisation COOP
                 let googleProvider = null;
                 let facebookProvider = null;
                 
@@ -245,10 +214,8 @@
                     googleProvider = new GoogleAuthProvider();
                     googleProvider.addScope('email');
                     googleProvider.addScope('profile');
-                    // 🔧 FIX COOP: Configuration optimisée pour les redirects
                     googleProvider.setCustomParameters({ 
                         prompt: 'select_account',
-                        // Paramètres optimisés pour Firebase Hosting et COOP
                         redirect_uri: window.location.origin + window.location.pathname
                     });
                     console.log('✅ Google Provider configuré (optimisé COOP)');
@@ -260,9 +227,8 @@
                     facebookProvider = new FacebookAuthProvider();
                     facebookProvider.addScope('public_profile');
                     facebookProvider.addScope('email');
-                    // 🔧 FIX COOP: Configuration optimisée pour les redirects
                     facebookProvider.setCustomParameters({ 
-                        display: 'page', // Utiliser 'page' au lieu de 'popup' pour les redirects
+                        display: 'page',
                         auth_type: 'rerequest'
                     });
                     console.log('✅ Facebook Provider configuré (optimisé COOP)');
@@ -270,15 +236,11 @@
                     console.warn('⚠️ Erreur configuration Facebook Provider:', error);
                 }
 
-                // Créer l'objet API unifié
                 this.firebaseAuth = {
-                    // Core Firebase objects
                     app: this.app,
                     auth: this.auth,
                     db: this.db,
                     storage: this.storage,
-                    
-                    // Auth methods - signInWithRedirect et getRedirectResult inclus
                     onAuthStateChanged,
                     signOut,
                     updateProfile,
@@ -290,8 +252,6 @@
                     sendPasswordResetEmail,
                     googleProvider,
                     facebookProvider,
-                    
-                    // Firestore methods
                     doc,
                     getDoc,
                     setDoc,
@@ -303,20 +263,15 @@
                     limit,
                     where,
                     startAfter,
-                    
-                    // Storage methods
                     ref,
                     uploadBytes,
                     getDownloadURL
                 };
 
-                // Configurer l'écoute d'auth state centralisée
                 this._setupAuthStateListener();
                 
-                // Exposer globalement pour compatibilité
                 window.firebaseAuth = this.firebaseAuth;
                 
-                // Marquer comme initialisé
                 this.initialized = true;
                 this.isLoading = false;
                 this.retryCount = 0;
@@ -329,15 +284,14 @@
                 
                 this.isLoading = false;
                 this.hasError = true;
-                this.initPromise = null; // Reset pour retry
+                this.initPromise = null;
                 
-                // Retry automatique avec limite
                 if (this.retryCount < this.config.maxRetries) {
                     this.retryCount++;
                     console.log(`🔄 Retry ${this.retryCount}/${this.config.maxRetries} dans ${this.config.retryDelay}ms...`);
                     
                     await this._delay(this.config.retryDelay * this.retryCount);
-                    return this.initialize(); // Recursive retry
+                    return this.initialize();
                 }
                 
                 console.error('🚫 Firebase Manager - Tous les retries échoués');
@@ -345,78 +299,175 @@
             }
         }
 
-        // ============= GESTION D'AUTHENTIFICATION CENTRALISÉE =============
-        
-        /**
-         * Configure l'écoute d'état d'authentification centralisée
-         * @private
-         */
-        _setupAuthStateListener() {
+        async _setupAuthStateListener() {
             const { onAuthStateChanged } = this.firebaseAuth;
             
-            // 🔧 FIX CRITIQUE: Vérification redirect simplifiée et sécurisée
-            this._checkRedirectResult();
+            await this._waitForAuthReady();
+            
+            await this._checkRedirectResultSafely();
             
             onAuthStateChanged(this.auth, async (user) => {
-                console.log('🔥 Auth state change détecté:', user ? user.email : 'déconnecté');
+                await this._handleAuthStateChangeSafely(user);
+            });
+        }
+
+        async _waitForAuthReady() {
+            return new Promise((resolve) => {
+                const checkReady = () => {
+                    if (this.auth && this.auth.currentUser !== undefined) {
+                        resolve();
+                    } else {
+                        setTimeout(checkReady, 50);
+                    }
+                };
+                checkReady();
+            });
+        }
+
+        async _handleAuthStateChangeSafely(user) {
+            if (this.authMutex) {
+                console.log('🔒 Auth state change en cours, skipping...');
+                return;
+            }
+            
+            this.authMutex = true;
+            
+            try {
+                console.log('🔥 Auth state change - processing safely:', user ? user.email : 'déconnecté');
                 
                 this.currentUser = user;
                 
                 if (user) {
-                    // Charger données utilisateur avec cache
-                    this.userData = await this._getUserDataWithCache(user);
+                    this.userData = await this._loadUserDataSafely(user);
                 } else {
                     this.userData = null;
                     this._clearUserCache();
                 }
                 
-                // Notifier tous les composants
-                this._notifyAuthCallbacks(user, this.userData);
-            });
+                this.authState = 'ready';
+                
+                await this._notifyAuthCallbacksSafely(user, this.userData);
+                
+            } catch (error) {
+                console.error('❌ Erreur auth state change:', error);
+                this.authState = 'error';
+                
+                await this._notifyAuthCallbacksSafely(user, null, error);
+                
+            } finally {
+                this.authMutex = false;
+            }
         }
 
-        /**
-         * Vérifie le résultat d'une redirection OAuth de façon sécurisée
-         * @private
-         */
-        async _checkRedirectResult() {
+        async _loadUserDataSafely(user, retryCount = 0) {
+            const maxRetries = 3;
+            
             try {
-                if (!this.firebaseAuth?.getRedirectResult) return;
+                if (this.userDataLoadingPromise && this.currentUser?.uid === user.uid) {
+                    return await this.userDataLoadingPromise;
+                }
                 
-                // 🔧 FIX COOP: Ajouter un délai pour laisser la page se stabiliser après redirect
-                await this._delay(100);
+                this.userDataLoadingPromise = Promise.race([
+                    this._getUserDataWithCache(user),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('User data timeout')), 10000)
+                    )
+                ]);
                 
-                const result = await this.firebaseAuth.getRedirectResult(this.auth);
+                const userData = await this.userDataLoadingPromise;
+                this.userDataLoadingPromise = null;
+                
+                return userData;
+                
+            } catch (error) {
+                this.userDataLoadingPromise = null;
+                
+                console.error(`❌ Erreur chargement données utilisateur (attempt ${retryCount + 1}):`, error);
+                
+                if (retryCount < maxRetries) {
+                    await this._delay(1000 * Math.pow(2, retryCount));
+                    return this._loadUserDataSafely(user, retryCount + 1);
+                }
+                
+                console.warn('⚠️ Fallback vers données Firebase de base');
+                return user;
+            }
+        }
+
+        async _notifyAuthCallbacksSafely(user, userData, error = null) {
+            const callbackPromises = this.authCallbacks.map(async (callback, index) => {
+                try {
+                    await Promise.race([
+                        callback(user, userData, error),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Callback timeout')), 5000)
+                        )
+                    ]);
+                } catch (callbackError) {
+                    console.error(`❌ Erreur callback auth ${index}:`, callbackError);
+                }
+            });
+            
+            await Promise.allSettled(callbackPromises);
+        }
+
+        async _checkRedirectResultSafely() {
+            try {
+                if (!this.firebaseAuth?.getRedirectResult) {
+                    console.log('ℹ️ getRedirectResult non disponible');
+                    return;
+                }
+                
+                await this._delay(200);
+                
+                const result = await Promise.race([
+                    this.firebaseAuth.getRedirectResult(this.auth),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Redirect check timeout')), 3000)
+                    )
+                ]);
+                
                 if (result && result.user) {
-                    console.log('✅ Redirection authentification réussie:', result.user.email);
-                    // Nettoyer l'URL si elle contient des paramètres OAuth
-                    this._cleanOAuthURL();
+                    console.log('✅ Redirection OAuth réussie:', result.user.email);
+                    this._cleanOAuthURLSafely(true);
                 } else {
                     console.log('ℹ️ Aucune redirection OAuth en attente');
                 }
+                
             } catch (error) {
-                // Les erreurs de redirect sont normales s'il n'y a pas de redirection en cours
-                if (error.code === 'auth/argument-error' || 
-                    error.code === 'auth/no-auth-event' ||
-                    error.code === 'auth/operation-not-allowed') {
-                    console.log('ℹ️ Aucune redirection OAuth en cours (normal)');
+                const expectedErrors = [
+                    'auth/argument-error',
+                    'auth/no-auth-event', 
+                    'auth/operation-not-allowed',
+                    'auth/timeout'
+                ];
+                
+                if (expectedErrors.includes(error.code) || error.message.includes('timeout')) {
+                    console.log('ℹ️ Pas de redirection OAuth (normal):', error.code);
                 } else {
-                    console.warn('⚠️ Erreur vérification redirect (non critique):', error.code);
+                    console.warn('⚠️ Erreur inattendue redirect check:', error);
                 }
             }
         }
 
-        /**
-         * Nettoie l'URL des paramètres OAuth après une redirection réussie
-         * @private
-         */
-        _cleanOAuthURL() {
+        _cleanOAuthURLSafely(hasRedirectResult = false) {
             try {
                 const url = new URL(window.location.href);
                 let hasOAuthParams = false;
                 
-                // Paramètres OAuth courants à nettoyer
-                const oauthParams = ['code', 'state', 'scope', 'authuser', 'prompt'];
+                if (!hasRedirectResult) {
+                    return;
+                }
+                
+                const oauthParams = ['code', 'state', 'scope', 'authuser', 'prompt', 'hd'];
+                
+                const hasGoogleParams = url.searchParams.has('code') && url.searchParams.has('scope');
+                const hasFacebookParams = url.searchParams.has('code') && url.searchParams.has('state');
+                
+                if (!hasGoogleParams && !hasFacebookParams) {
+                    console.log('ℹ️ Pas de paramètres OAuth détectés');
+                    return;
+                }
                 
                 oauthParams.forEach(param => {
                     if (url.searchParams.has(param)) {
@@ -425,20 +476,43 @@
                     }
                 });
                 
-                // Mettre à jour l'URL si nécessaire
                 if (hasOAuthParams) {
-                    window.history.replaceState({}, document.title, url.pathname + url.search);
-                    console.log('🧹 URL nettoyée des paramètres OAuth');
+                    const newUrl = url.pathname + (url.search || '');
+                    window.history.replaceState({}, document.title, newUrl);
+                    console.log('🧹 URL OAuth nettoyée de façon sécurisée');
                 }
+                
             } catch (error) {
                 console.warn('⚠️ Erreur nettoyage URL (non critique):', error);
             }
         }
 
-        /**
-         * Ajoute un callback d'état d'authentification
-         * @param {Function} callback - Fonction à appeler sur changement d'auth
-         */
+        async waitForAuthReady() {
+            if (this.authState === 'ready') {
+                return { user: this.currentUser, userData: this.userData };
+            }
+            
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('Auth ready timeout'));
+                }, 15000);
+                
+                const checkReady = () => {
+                    if (this.authState === 'ready') {
+                        clearTimeout(timeout);
+                        resolve({ user: this.currentUser, userData: this.userData });
+                    } else if (this.authState === 'error') {
+                        clearTimeout(timeout);
+                        reject(new Error('Auth initialization failed'));
+                    } else {
+                        setTimeout(checkReady, 100);
+                    }
+                };
+                
+                checkReady();
+            });
+        }
+
         onAuthStateChanged(callback) {
             if (typeof callback !== 'function') {
                 console.warn('⚠️ Callback auth state doit être une fonction');
@@ -447,58 +521,33 @@
             
             this.authCallbacks.push(callback);
             
-            // Si déjà initialisé, appeler immédiatement
-            if (this.initialized && this.currentUser !== undefined) {
-                callback(this.currentUser, this.userData);
+            if (this.authState === 'ready') {
+                setTimeout(() => {
+                    this._notifyAuthCallbacksSafely(this.currentUser, this.userData);
+                }, 0);
             }
             
             console.log(`🔥 Callback auth ajouté - Total: ${this.authCallbacks.length}`);
-        }
-
-        /**
-         * Supprime un callback d'état d'authentification
-         * @param {Function} callback - Fonction à supprimer
-         */
-        removeAuthCallback(callback) {
-            const index = this.authCallbacks.indexOf(callback);
-            if (index > -1) {
-                this.authCallbacks.splice(index, 1);
-                console.log(`🔥 Callback auth supprimé - Total: ${this.authCallbacks.length}`);
-            }
-        }
-
-        /**
-         * Notifie tous les callbacks d'auth state
-         * @private
-         */
-        _notifyAuthCallbacks(user, userData) {
-            this.authCallbacks.forEach((callback, index) => {
-                try {
-                    callback(user, userData);
-                } catch (error) {
-                    console.error(`❌ Erreur callback auth ${index}:`, error);
+            
+            return () => {
+                const index = this.authCallbacks.indexOf(callback);
+                if (index > -1) {
+                    this.authCallbacks.splice(index, 1);
+                    console.log(`🔥 Callback auth supprimé - Total: ${this.authCallbacks.length}`);
                 }
-            });
+            };
         }
 
-        // ============= GESTION DES DONNÉES UTILISATEUR AVEC CACHE LRU =============
-        
-        /**
-         * Récupère les données utilisateur avec cache LRU
-         * @private
-         */
         async _getUserDataWithCache(user) {
             try {
                 if (!user || !user.uid) return user;
                 
-                // Vérifier le cache LRU
                 const cached = this.userDataCache.get(user.uid);
                 if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
                     console.log('📋 Données utilisateur depuis le cache LRU');
                     return cached.data;
                 }
                 
-                // Charger depuis Firestore
                 const userRef = this.firebaseAuth.doc(this.db, 'users', user.uid);
                 const userDoc = await this.firebaseAuth.getDoc(userRef);
                 
@@ -506,20 +555,16 @@
                 if (userDoc.exists()) {
                     userData = { ...user, ...userDoc.data() };
                 } else {
-                    // 🔧 CORRIGÉ: Créer automatiquement le profil par défaut avec uid
                     console.log('🔧 Création profil par défaut pour:', user.email);
                     const defaultProfile = this.createDefaultProfile(user);
                     
-                    // Sauvegarder dans Firestore
                     await this.firebaseAuth.setDoc(userRef, defaultProfile);
                     
-                    // Combiner avec les données utilisateur Firebase
                     userData = { ...user, ...defaultProfile };
                     
                     console.log('✅ Profil par défaut créé avec uid pour:', user.email);
                 }
                 
-                // Mettre en cache LRU
                 this.userDataCache.set(user.uid, {
                     data: userData,
                     timestamp: Date.now()
@@ -534,14 +579,9 @@
             }
         }
 
-        /**
-         * 🔧 CORRIGÉ: Crée un profil par défaut pour un nouvel utilisateur
-         * @param {Object} user - L'objet utilisateur Firebase
-         * @returns {Object} - Le profil par défaut
-         */
         createDefaultProfile(user) {
             return {
-                uid: user.uid,  // 🔧 ESSENTIEL : uid obligatoire pour les règles Firestore
+                uid: user.uid,
                 displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
                 email: user.email,
                 profile: {
@@ -584,9 +624,6 @@
             };
         }
 
-        /**
-         * Met à jour les données utilisateur avec invalidation cache
-         */
         async updateUserData(userId, updateData) {
             try {
                 if (!this.firebaseAuth || !this.db) {
@@ -595,7 +632,6 @@
 
                 const userRef = this.firebaseAuth.doc(this.db, 'users', userId);
                 
-                // Ajouter timestamp de mise à jour
                 const dataWithTimestamp = {
                     ...updateData,
                     updatedAt: new Date()
@@ -603,7 +639,6 @@
                 
                 await this.firebaseAuth.updateDoc(userRef, dataWithTimestamp);
                 
-                // Invalider le cache
                 this.invalidateUserCache(userId);
                 
                 console.log('✅ Données utilisateur mises à jour');
@@ -615,28 +650,16 @@
             }
         }
 
-        /**
-         * Invalide le cache pour un utilisateur
-         */
         invalidateUserCache(userId) {
             this.userDataCache.delete(userId);
             console.log('🗑️ Cache utilisateur invalidé:', userId);
         }
 
-        /**
-         * Vide tout le cache utilisateur
-         * @private
-         */
         _clearUserCache() {
             this.userDataCache.clear();
             console.log('🗑️ Cache utilisateur vidé');
         }
 
-        // ============= MÉTHODES D'AUTHENTIFICATION SÉCURISÉES =============
-
-        /**
-         * Authentification Google - Force le redirect pour éviter les problèmes COOP
-         */
         async signInWithGoogle() {
             try {
                 if (!this.firebaseAuth?.googleProvider) {
@@ -645,9 +668,7 @@
 
                 console.log('🔐 Connexion Google via redirect (optimisé COOP)...');
                 
-                // 🔧 FIX COOP: Utiliser directement redirect pour éviter les erreurs de politique
                 await this.firebaseAuth.signInWithRedirect(this.auth, this.firebaseAuth.googleProvider);
-                // Note: cette méthode redirige la page, donc pas de return
                 
             } catch (error) {
                 console.error('❌ Erreur Google sign-in:', error);
@@ -655,9 +676,6 @@
             }
         }
 
-        /**
-         * Authentification Facebook - Force le redirect pour éviter les problèmes COOP
-         */
         async signInWithFacebook() {
             try {
                 if (!this.firebaseAuth?.facebookProvider) {
@@ -666,9 +684,7 @@
 
                 console.log('🔐 Connexion Facebook via redirect (optimisé COOP)...');
                 
-                // 🔧 FIX COOP: Utiliser directement redirect pour éviter les erreurs de politique
                 await this.firebaseAuth.signInWithRedirect(this.auth, this.firebaseAuth.facebookProvider);
-                // Note: cette méthode redirige la page, donc pas de return
                 
             } catch (error) {
                 console.error('❌ Erreur Facebook sign-in:', error);
@@ -676,9 +692,6 @@
             }
         }
 
-        /**
-         * Méthode alternative pour popup (si besoin dans des contextes spéciaux)
-         */
         async signInWithGooglePopup() {
             try {
                 if (!this.firebaseAuth?.googleProvider) {
@@ -692,14 +705,10 @@
                 
             } catch (error) {
                 console.warn('⚠️ Popup Google bloqué par COOP:', error.code);
-                // Fallback automatique vers redirect
                 return this.signInWithGoogle();
             }
         }
 
-        /**
-         * Méthode alternative pour popup Facebook (si besoin dans des contextes spéciaux)
-         */
         async signInWithFacebookPopup() {
             try {
                 if (!this.firebaseAuth?.facebookProvider) {
@@ -713,51 +722,30 @@
                 
             } catch (error) {
                 console.warn('⚠️ Popup Facebook bloqué par COOP:', error.code);
-                // Fallback automatique vers redirect
                 return this.signInWithFacebook();
             }
         }
 
-        // ============= MÉTHODES PUBLIQUES =============
-        
-        /**
-         * Obtient l'utilisateur actuel
-         */
         getCurrentUser() {
             return this.currentUser;
         }
 
-        /**
-         * Obtient les données utilisateur actuelles
-         */
         getCurrentUserData() {
             return this.userData;
         }
 
-        /**
-         * Vérifie si Firebase est initialisé
-         */
         isInitialized() {
             return this.initialized;
         }
 
-        /**
-         * Vérifie si Firebase est en cours de chargement
-         */
         isLoading() {
             return this.isLoading;
         }
 
-        /**
-         * Vérifie si Firebase a une erreur
-         */
         hasError() {
             return this.hasError;
         }
 
-        /**
-         * Force un retry d'initialisation
-         */
         async retry() {
             console.log('🔄 Force retry Firebase Manager...');
             this.initialized = false;
@@ -768,9 +756,6 @@
             return this.initialize();
         }
 
-        /**
-         * Déconnexion centralisée avec navigation sécurisée
-         */
         async signOut() {
             try {
                 if (!this.firebaseAuth || !this.auth) {
@@ -780,7 +765,6 @@
                 await this.firebaseAuth.signOut(this.auth);
                 console.log('✅ Déconnexion réussie via Firebase Manager');
                 
-                // Navigation sécurisée vers l'accueil
                 this.navigateToHome();
                 return true;
                 
@@ -790,16 +774,9 @@
             }
         }
 
-        // ============= NAVIGATION SÉCURISÉE (Fix Bug #9) =============
-        
-        /**
-         * Détecte le niveau de profondeur actuel de manière simplifiée
-         * @returns {string} Le préfixe de chemin approprié
-         */
         getPathPrefix() {
             const pathname = window.location.pathname;
             
-            // Compter les segments réels (pas vides, pas index.html)
             const segments = pathname.split('/').filter(segment => 
                 segment !== '' && segment !== 'index.html'
             );
@@ -811,10 +788,6 @@
             return prefix;
         }
 
-        /**
-         * Navigation sécurisée entre les pages
-         * @param {string} page - La page de destination
-         */
         navigateTo(page) {
             try {
                 const prefix = this.getPathPrefix();
@@ -836,7 +809,6 @@
                 
                 const destination = prefix + routes[page];
                 
-                // Validation de sécurité simplifiée
                 if (destination.includes('../') && destination.split('../').length > 6) {
                     console.error('🚫 Tentative de navigation non sécurisée bloquée');
                     return;
@@ -851,9 +823,6 @@
             }
         }
 
-        /**
-         * Retour à l'accueil de manière sécurisée
-         */
         navigateToHome() {
             try {
                 const prefix = this.getPathPrefix();
@@ -868,11 +837,6 @@
             }
         }
 
-        /**
-         * Obtient le chemin de navigation pour une page donnée
-         * @param {string} page - La page de destination
-         * @returns {string} Le chemin complet vers la page
-         */
         getNavigationPath(page) {
             try {
                 const prefix = this.getPathPrefix();
@@ -902,11 +866,6 @@
             }
         }
 
-        // ============= FONCTIONS UTILITAIRES =============
-        
-        /**
-         * Obtient le nom d'affichage selon les préférences
-         */
         getDisplayName(userData) {
             try {
                 if (!userData) return 'Anonymous';
@@ -923,9 +882,6 @@
             }
         }
 
-        /**
-         * Obtient l'emoji du drapeau pour un code pays
-         */
         getFlagEmoji(countryCode) {
             const flags = {
                 'FR': '🇫🇷', 'US': '🇺🇸', 'GB': '🇬🇧', 'DE': '🇩🇪', 'ES': '🇪🇸',
@@ -938,9 +894,6 @@
             return flags[countryCode] || '🌍';
         }
 
-        /**
-         * Vérifie si le profil utilisateur est complet
-         */
         isProfileComplete(userData) {
             try {
                 return userData?.profile?.isProfileComplete === true;
@@ -950,17 +903,10 @@
             }
         }
 
-        /**
-         * Délai asynchrone
-         * @private
-         */
         _delay(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
-        /**
-         * Statistiques du cache LRU
-         */
         getCacheStats() {
             return {
                 size: this.userDataCache.size,
@@ -969,9 +915,6 @@
             };
         }
 
-        /**
-         * Debug de l'état du manager
-         */
         debug() {
             console.group('🔥 Firebase Manager Debug');
             console.log('Initialized:', this.initialized);
@@ -986,12 +929,8 @@
         }
     }
 
-    // ============= EXPOSITION GLOBALE =============
-    
-    // Créer l'instance singleton
     window.FirebaseManager = new FirebaseManager();
     
-    // Alias pour compatibilité avec l'ancien code
     window.initFirebase = () => window.FirebaseManager.initialize();
     window.signOutUser = () => window.FirebaseManager.signOut();
     window.getUserData = (user) => window.FirebaseManager._getUserDataWithCache(user);
@@ -1002,7 +941,6 @@
     window.goToHome = () => window.FirebaseManager.navigateToHome();
     window.getNavigationPath = (page) => window.FirebaseManager.getNavigationPath(page);
 
-    // Auto-initialisation pour les pages qui en ont besoin
     function needsFirebase() {
         const firebaseSelectors = [
             '#login-form',
@@ -1024,7 +962,6 @@
         return hasFirebaseElements || isFirebasePage;
     }
 
-    // Auto-initialisation conditionnelle
     document.addEventListener('DOMContentLoaded', function() {
         if (needsFirebase()) {
             console.log('🔥 Page nécessite Firebase - Auto-initialisation...');
@@ -1036,7 +973,6 @@
         }
     });
 
-    // Mode debug en développement
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         window.debugFirebaseManager = () => window.FirebaseManager.debug();
         window.retryFirebaseManager = () => window.FirebaseManager.retry();

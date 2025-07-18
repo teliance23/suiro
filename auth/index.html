@@ -921,6 +921,7 @@
                 try {
                     this.parseURLParameters();
                     this.setupFirebaseManager();
+                    this.checkRedirectResult();
                     this.setupEventListeners();
                     this.setupValidation();
                 } catch (error) {
@@ -964,6 +965,12 @@
                     window.FirebaseManager.onAuthStateChanged((user, userData) => {
                         this.currentUser = user;
                         
+                        console.group('🔍 AUTH STATE CHANGE DANS AUTH MANAGER');
+                        console.log('Timestamp:', new Date().toISOString());
+                        console.log('User:', user ? user.email : 'null');
+                        console.log('UserData:', userData ? 'loaded' : 'null');
+                        console.groupEnd();
+                        
                         if (user) {
                             this.handleSuccessfulAuth(userData || user);
                         } else {
@@ -973,6 +980,40 @@
                 } catch (error) {
                     console.error('Error setupFirebaseManager:', error);
                     this.showError('Firebase initialization failed');
+                }
+            },
+
+            checkRedirectResult: async function() {
+                try {
+                    const firebase = await window.FirebaseManager.initialize();
+                    if (!firebase) return;
+                    
+                    console.group('🔍 DIAGNOSTIC ÉTAT AUTH COMPLET');
+                    console.log('🔄 Vérification redirect result...');
+                    console.log('Auth object:', firebase.auth);
+                    console.log('Current user avant redirect check:', firebase.auth.currentUser);
+                    
+                    const result = await firebase.getRedirectResult(firebase.auth);
+                    console.log('Redirect result:', result);
+                    
+                    // Vérifier l'état auth immédiatement
+                    console.log('Current user après redirect check:', firebase.auth.currentUser);
+                    
+                    if (result && result.user) {
+                        console.log('✅ SUCCÈS via redirect:', result.user.email);
+                        console.log('👤 User redirect result:', {
+                            uid: result.user.uid,
+                            email: result.user.email,
+                            displayName: result.user.displayName,
+                            photoURL: result.user.photoURL
+                        });
+                    } else {
+                        console.log('ℹ️ Aucun redirect result - connexion normale');
+                    }
+                    console.groupEnd();
+                } catch (error) {
+                    console.error('❌ Erreur redirect result:', error);
+                    this.handleAuthError(error, 'Redirect sign-in failed');
                 }
             },
 
@@ -1022,11 +1063,10 @@
                 }
             },
 
-            // ============= FONCTION GOOGLE SIGN-IN AVEC DEBUG COMPLET =============
+            // ============= DEBUG TEMPORAIRE POUR signInWithGoogle =============
             signInWithGoogle: async function() {
                 if (this.isLoading || this.isBlocked()) return;
                 
-                // Debug complet pour diagnostiquer le problème OAuth
                 console.group('🔥 GOOGLE SIGN-IN DEBUG COMPLET');
                 console.log('🚀 Début signInWithGoogle');
                 
@@ -1046,124 +1086,69 @@
                     console.log('- Google Provider:', !!firebase.googleProvider);
                     console.log('- signInWithPopup:', !!firebase.signInWithPopup);
                     
-                    // 2. Vérifications de sécurité
-                    if (!firebase.auth || !firebase.googleProvider || !firebase.signInWithPopup) {
-                        throw new Error('Firebase components missing');
-                    }
+                    // 2. Vérification état auth AVANT
+                    console.log('👤 Current user AVANT popup:', firebase.auth.currentUser);
                     
-                    // 3. Configuration détaillée du provider
-                    console.log('⚙️ Configuration Google Provider...');
+                    // 3. Configuration provider
                     const provider = firebase.googleProvider;
+                    console.log('⚙️ Provider configuré:', provider);
                     
-                    // Afficher la configuration actuelle
-                    console.log('Provider configuré avec scopes et paramètres');
+                    // 4. TENTATIVE POPUP AVEC DEBUG COMPLET
+                    console.log('🚀 Lancement signInWithPopup...');
                     
-                    // 4. Test de la configuration OAuth
-                    console.log('🔧 Test configuration OAuth...');
-                    console.log('Domain actuel:', window.location.hostname);
-                    console.log('URL complète:', window.location.href);
-                    console.log('Domain autorisé ?', this.checkAuthorizedDomain());
-                    console.log('Popup bloquée ?', this.checkPopupBlocked());
-                    console.log('Réseau OK ?', navigator.onLine);
-                    
-                    // 5. Tentative de connexion avec gestion d'erreurs détaillée
-                    console.log('🚀 Lancement popup Google...');
                     const result = await firebase.signInWithPopup(firebase.auth, provider);
                     
-                    // 6. Succès - Affichage détaillé
-                    console.log('✅ SUCCÈS Google Sign-In !');
-                    console.log('👤 User result:', {
-                        uid: result.user.uid,
-                        email: result.user.email,
-                        displayName: result.user.displayName,
-                        photoURL: result.user.photoURL
-                    });
+                    // 5. ANALYSE DU RÉSULTAT
+                    console.group('✅ RÉSULTAT POPUP');
+                    console.log('📦 Result object:', result);
+                    console.log('👤 User dans result:', result.user);
+                    console.log('🎫 Credential:', result.credential);
+                    console.log('📧 Email user:', result.user?.email);
+                    console.log('🆔 UID user:', result.user?.uid);
+                    console.groupEnd();
                     
-                    // 7. Vérification credential
-                    if (result.credential) {
-                        console.log('🎫 Credential reçu:', result.credential);
-                    }
+                    // 6. VÉRIFICATION ÉTAT AUTH APRÈS
+                    console.log('👤 Current user APRÈS popup:', firebase.auth.currentUser);
                     
-                    console.log('🔄 Attente création document Firestore...');
+                    // 7. ATTENDRE UN PEU ET REVÉRIFIER
+                    setTimeout(() => {
+                        console.log('👤 Current user après 1 seconde:', firebase.auth.currentUser);
+                    }, 1000);
                     
-                    // Ne pas appeler setLoading(false) car handleSuccessfulAuth va rediriger
+                    setTimeout(() => {
+                        console.log('👤 Current user après 3 secondes:', firebase.auth.currentUser);
+                    }, 3000);
+                    
+                    // 8. Vérifier si onAuthStateChanged va se déclencher
+                    console.log('⏳ Attente onAuthStateChanged...');
+                    
+                    // 9. Ne pas appeler setLoading(false) ici pour voir ce qui se passe
                     
                 } catch (error) {
-                    console.group('❌ ERREUR GOOGLE SIGN-IN DÉTAILLÉE');
+                    console.group('❌ ERREUR GOOGLE SIGN-IN');
                     console.error('Type d\'erreur:', typeof error);
                     console.error('Code erreur:', error.code);
                     console.error('Message:', error.message);
-                    console.error('Stack trace:', error.stack);
-                    console.error('Objet erreur complet:', error);
+                    console.error('Stack:', error.stack);
+                    console.error('Objet complet:', error);
                     console.groupEnd();
                     
                     this.setLoading(false);
                     
-                    // 8. Gestion d'erreurs OAuth spécifiques avec alertes détaillées
+                    // Gestion d'erreurs selon le code
                     if (error.code === 'auth/popup-closed-by-user') {
-                        console.log('ℹ️ Popup fermée par utilisateur - pas d\'erreur');
-                        // Ne pas afficher d'erreur si l'utilisateur ferme volontairement
+                        console.log('ℹ️ Popup fermée par utilisateur');
                         return;
-                    } else if (error.code === 'auth/unauthorized-domain') {
-                        console.error('🚫 DOMAINE NON AUTORISÉ !');
-                        alert('❌ ERREUR CONFIGURATION OAUTH\n\n' +
-                              'Le domaine suirodoku.com n\'est pas autorisé dans Google Cloud Console.\n\n' +
-                              'Vérifiez :\n' +
-                              '• Google Cloud Console\n' +
-                              '• APIs & Services → Credentials\n' +
-                              '• OAuth 2.0 Client → Origines JavaScript autorisées\n' +
-                              '• Ajoutez : https://suirodoku.com');
-                        return;
-                    } else if (error.code === 'auth/popup-blocked') {
-                        this.showError('Popup bloquée. Veuillez autoriser les popups pour suirodoku.com et réessayer.');
                     } else if (error.code === 'auth/cancelled-popup-request') {
-                        console.log('ℹ️ Requête popup annulée - normale');
+                        console.log('ℹ️ Requête popup annulée');
                         return;
-                    } else if (error.code === 'auth/network-request-failed') {
-                        this.showError('Erreur réseau. Vérifiez votre connexion internet et réessayez.');
-                    } else if (error.code === 'auth/internal-error') {
-                        this.showError('Erreur interne Firebase. Veuillez réessayer dans quelques instants.');
                     } else {
-                        // Erreur inconnue - afficher le code pour diagnostic
-                        this.showError(`Erreur OAuth inconnue: ${error.code}\n\nMessage: ${error.message}\n\nVeuillez partager cette erreur avec le support.`);
-                        console.error('⚠️ ERREUR INCONNUE - Veuillez partager ce code:', error.code);
-                        
-                        // Alerte avec diagnostic complet
-                        alert('❌ ERREUR OAUTH DÉTAILLÉE\n\n' +
-                              `Code: ${error.code}\n` +
-                              `Message: ${error.message}\n\n` +
-                              `Domain: ${window.location.hostname}\n` +
-                              `URL: ${window.location.href}\n\n` +
-                              'Veuillez partager ces informations pour résoudre le problème.');
+                        console.error('❌ Erreur inconnue:', error.code);
+                        this.showError(`Erreur: ${error.code} - ${error.message}`);
                     }
                 }
                 
                 console.groupEnd();
-            },
-
-            // Fonctions helper pour le diagnostic OAuth
-            checkAuthorizedDomain: function() {
-                const currentDomain = window.location.hostname;
-                const authorizedDomains = ['suirodoku.com', 'www.suirodoku.com', 'localhost', '127.0.0.1'];
-                const isAuthorized = authorizedDomains.includes(currentDomain);
-                console.log(`🔍 Domain check: ${currentDomain} → ${isAuthorized ? 'AUTORISÉ' : 'NON AUTORISÉ'}`);
-                return isAuthorized;
-            },
-
-            checkPopupBlocked: function() {
-                try {
-                    const popup = window.open('', '', 'width=1,height=1');
-                    if (popup) {
-                        popup.close();
-                        console.log('🔍 Popup check: NON BLOQUÉE');
-                        return false; // Popup NOT blocked
-                    }
-                    console.log('🔍 Popup check: BLOQUÉE');
-                    return true; // Popup blocked
-                } catch (error) {
-                    console.log('🔍 Popup check: BLOQUÉE (erreur)');
-                    return true; // Popup blocked
-                }
             },
 
             signInWithFacebook: async function() {
@@ -1671,31 +1656,6 @@
                 }
             },
 
-            clearAlerts: function() {
-                const alerts = document.querySelectorAll('.alert');
-                alerts.forEach(alert => alert.classList.remove('show'));
-            }
-        };
-
-        document.addEventListener('DOMContentLoaded', function() {
-            try {
-                AuthManager.init();
-            } catch (error) {
-                console.error('Error initializing Auth page:', error);
-            }
-        });
-
-        window.AuthManager = AuthManager;
-    </script>
-</body>
-</html>add('show');
-                    
-                    setTimeout(() => {
-                        alert.classList.remove('show');
-                    }, 5000);
-                }
-            },
-
             showError: function(message) {
                 this.clearAlerts();
                 const alert = document.getElementById('error-alert');
@@ -1718,4 +1678,29 @@
                 
                 if (alert && text) {
                     text.textContent = message;
-                    alert.classList.
+                    alert.classList.add('show');
+                    
+                    setTimeout(() => {
+                        alert.classList.remove('show');
+                    }, 5000);
+                }
+            },
+
+            clearAlerts: function() {
+                const alerts = document.querySelectorAll('.alert');
+                alerts.forEach(alert => alert.classList.remove('show'));
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                AuthManager.init();
+            } catch (error) {
+                console.error('Error initializing Auth page:', error);
+            }
+        });
+
+        window.AuthManager = AuthManager;
+    </script>
+</body>
+</html>

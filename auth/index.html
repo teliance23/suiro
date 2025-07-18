@@ -908,23 +908,32 @@
     <script src="../mobile/menu.js"></script>
     
     <script>
+        // ============= AUTH MANAGER V2 - THREAD-SAFE AVEC FIREBASE MANAGER V2 =============
+        
         const AuthManager = {
+            // ============= STATE MANAGEMENT =============
             isLoginMode: true,
             isLoading: false,
             currentUser: null,
+            firebaseManager: null,
             redirectAfterLogin: null,
             loginAttempts: 0,
             maxAttempts: 5,
             blockUntil: null,
+            authUnsubscribe: null,
+            isInitialized: false,
+            
+            // ============= INITIALIZATION =============
             
             init: function() {
                 try {
                     this.parseURLParameters();
-                    this.setupFirebaseManager();
+                    this.setupFirebaseManagerV2(); // ✅ NOUVEAU - Thread-safe
                     this.setupEventListeners();
                     this.setupValidation();
+                    console.log('✅ AuthManager V2 initialized');
                 } catch (error) {
-                    console.error('Error initializing AuthManager:', error);
+                    console.error('❌ Error initializing AuthManager V2:', error);
                     this.showError('Failed to initialize authentication page');
                 }
             },
@@ -938,7 +947,7 @@
                         this.redirectAfterLogin = this.sanitizeRedirectURL(this.redirectAfterLogin);
                     }
                 } catch (error) {
-                    console.error('Error parseURLParameters:', error);
+                    console.error('❌ Error parseURLParameters:', error);
                     this.redirectAfterLogin = null;
                 }
             },
@@ -957,135 +966,137 @@
                 }
             },
 
-            setupFirebaseManager: async function() {
+            // ✅ NOUVEAU PATTERN - Thread-safe Firebase setup
+            setupFirebaseManagerV2: async function() {
                 try {
-                    await window.FirebaseManager.initialize();
+                    // ✅ Utiliser getInstance() au lieu de initialize()
+                    this.firebaseManager = await window.FirebaseManager.getInstance();
                     
-                    const firebase = await window.FirebaseManager.initialize();
-                    if (firebase && firebase.getRedirectResult) {
-                        try {
-                            const result = await firebase.getRedirectResult(firebase.auth);
-                            if (result && result.user) {
-                                console.log('✅ Redirect authentification réussie:', result.user.email);
-                                return;
-                            }
-                        } catch (redirectError) {
-                            console.error('❌ Erreur redirect result:', redirectError);
-                            this.handleAuthError(redirectError, 'Authentication redirect failed');
+                    // ✅ Attendre que Firebase soit prêt avec waitForAuthReady()
+                    await this.firebaseManager.waitForAuthReady();
+                    
+                    // ✅ Vérifier redirect result de façon thread-safe
+                    await this.checkRedirectResultSafely();
+                    
+                    // ✅ Utiliser la nouvelle API de callbacks thread-safe
+                    this.authUnsubscribe = this.firebaseManager.onAuthStateChanged(
+                        async (user, userData, error) => {
+                            await this.handleAuthStateChangeSafely(user, userData, error);
                         }
+                    );
+                    
+                    this.isInitialized = true;
+                    console.log('✅ Firebase Manager V2 setup completed');
+                    
+                } catch (error) {
+                    console.error('❌ Error setupFirebaseManagerV2:', error);
+                    this.showError('Firebase initialization failed');
+                }
+            },
+
+            // ✅ NOUVEAU PATTERN - Thread-safe redirect check
+            async checkRedirectResultSafely() {
+                try {
+                    // Utiliser la méthode thread-safe du FirebaseManager
+                    const result = await Promise.race([
+                        this.firebaseManager.firebaseAuth.getRedirectResult(this.firebaseManager.auth),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Redirect timeout')), 5000)
+                        )
+                    ]);
+                    
+                    if (result && result.user) {
+                        console.log('✅ Redirect authentication successful:', result.user.email);
                     }
                     
-                    window.FirebaseManager.onAuthStateChanged((user, userData) => {
+                } catch (redirectError) {
+                    // Ignorer les erreurs non critiques
+                    const ignoredErrors = ['auth/no-auth-event', 'auth/operation-not-allowed'];
+                    if (!ignoredErrors.includes(redirectError.code) && 
+                        !redirectError.message.includes('timeout')) {
+                        console.error('❌ Redirect result error:', redirectError);
+                        this.handleAuthError(redirectError, 'Authentication redirect failed');
+                    }
+                }
+            },
+
+            // ✅ NOUVEAU PATTERN - Thread-safe auth state handling
+            async handleAuthStateChangeSafely(user, userData, error) {
+                try {
+                    // ✅ Utiliser operationQueue.enqueue() pour éviter les race conditions
+                    return this.firebaseManager.operationQueue.enqueue(async () => {
                         this.currentUser = user;
                         
+                        if (error) {
+                            console.error('❌ Auth state error:', error);
+                            this.showError('Authentication error occurred');
+                            return;
+                        }
+                        
                         if (user) {
-                            this.handleSuccessfulAuth(userData || user);
+                            await this.handlePostLoginV2(userData || user);
                         } else {
                             this.currentUser = null;
                         }
                     });
                     
                 } catch (error) {
-                    console.error('Error setupFirebaseManager:', error);
-                    this.showError('Firebase initialization failed');
+                    console.error('❌ Error handleAuthStateChangeSafely:', error);
+                    this.showError('Authentication processing failed');
                 }
             },
 
-            handleSuccessfulAuth: async function(userData) {
+            // ✅ NOUVEAU PATTERN - Remplace handleSuccessfulAuth avec API V2
+            async handlePostLoginV2(userData) {
                 try {
-                    await this.waitForFirebaseReady();
+                    // ✅ Utiliser getUserData() avec options au lieu d'accès direct
+                    const validatedData = await this.firebaseManager.getUserData(userData, {
+                        useCache: false,
+                        validatePermissions: false,
+                        includeProfile: true,
+                        includeStats: false
+                    });
                     
-                    const validatedData = await this.validateAndCompleteUserData(userData);
-                    
+                    // ✅ Utiliser AuthUtils.handlePostLogin() thread-safe
                     if (typeof window.AuthUtils !== 'undefined' && window.AuthUtils.handlePostLogin) {
                         window.AuthUtils.handlePostLogin(validatedData, this.redirectAfterLogin);
                     } else {
-                        await this.handlePostLoginFallback(validatedData);
+                        await this.handlePostLoginFallbackV2(validatedData);
                     }
                     
                 } catch (error) {
-                    console.error('Error handleSuccessfulAuth:', error);
+                    console.error('❌ Error handlePostLoginV2:', error);
                     this.showError('Error processing login. Redirecting...');
                     
                     setTimeout(() => {
-                        window.location.href = '../';
+                        this.firebaseManager.navigateToHome();
                     }, 2000);
                 }
             },
             
-            async waitForFirebaseReady() {
+            // ✅ NOUVEAU PATTERN - Fallback thread-safe
+            async handlePostLoginFallbackV2(userData) {
                 try {
-                    if (window.FirebaseManager && window.FirebaseManager.waitForAuthReady) {
-                        await window.FirebaseManager.waitForAuthReady();
-                    } else {
-                        await new Promise((resolve) => {
-                            const checkReady = () => {
-                                if (window.FirebaseManager && window.FirebaseManager.isInitialized()) {
-                                    resolve();
-                                } else {
-                                    setTimeout(checkReady, 100);
-                                }
-                            };
-                            checkReady();
-                        });
-                    }
-                } catch (error) {
-                    console.warn('⚠️ Timeout attente Firebase ready:', error);
-                }
-            },
-            
-            async validateAndCompleteUserData(userData) {
-                try {
-                    if (!userData || !userData.uid) {
-                        throw new Error('Invalid user data');
-                    }
-                    
-                    if (!userData.profile || !userData.privacy) {
-                        console.log('🔄 Rechargement données utilisateur...');
-                        
-                        const refreshedData = await window.FirebaseManager._getUserDataWithCache(userData);
-                        return refreshedData || userData;
-                    }
-                    
-                    return userData;
-                    
-                } catch (error) {
-                    console.warn('⚠️ Erreur validation userData:', error);
-                    return userData;
-                }
-            },
-            
-            async handlePostLoginFallback(userData) {
-                try {
-                    const displayName = this.getDisplayNameSafely(userData);
+                    const displayName = this.firebaseManager.getDisplayName(userData);
                     this.showSuccess(`Welcome, ${displayName}!`);
                     
                     setTimeout(() => {
                         if (this.redirectAfterLogin) {
                             window.location.href = this.redirectAfterLogin;
                         } else {
-                            window.location.href = '../';
+                            this.firebaseManager.navigateToHome();
                         }
                     }, 1000);
                     
                 } catch (error) {
-                    console.error('Error handlePostLoginFallback:', error);
+                    console.error('❌ Error handlePostLoginFallbackV2:', error);
                     setTimeout(() => {
-                        window.location.href = '../';
+                        this.firebaseManager.navigateToHome();
                     }, 500);
                 }
             },
-            
-            getDisplayNameSafely(userData) {
-                try {
-                    if (window.FirebaseManager && window.FirebaseManager.getDisplayName) {
-                        return window.FirebaseManager.getDisplayName(userData);
-                    }
-                    return userData?.displayName || userData?.email?.split('@')[0] || 'User';
-                } catch (error) {
-                    return 'User';
-                }
-            },
+
+            // ============= SOCIAL AUTHENTICATION =============
 
             signInWithGoogle: async function() {
                 if (this.isLoading || this.isBlocked()) return;
@@ -1093,13 +1104,14 @@
                 this.setLoading(true, 'google-btn', 'Signing in with Google...');
                 
                 try {
-                    const firebase = await window.FirebaseManager.initialize();
+                    // ✅ Utiliser l'API thread-safe du FirebaseManager
+                    const firebase = this.firebaseManager.firebaseAuth;
                     if (!firebase) throw new Error('Firebase not available');
                     
                     try {
                         await firebase.signInWithPopup(firebase.auth, firebase.googleProvider);
                     } catch (popupError) {
-                        console.log('🔄 Popup bloqué, utilisation redirect...', popupError.code);
+                        console.log('🔄 Popup blocked, using redirect...', popupError.code);
                         if (popupError.code === 'auth/popup-blocked' || 
                             popupError.code === 'auth/popup-closed-by-user') {
                             await firebase.signInWithRedirect(firebase.auth, firebase.googleProvider);
@@ -1108,7 +1120,7 @@
                         throw popupError;
                     }
                 } catch (error) {
-                    console.error('Error Google sign-in:', error);
+                    console.error('❌ Google sign-in error:', error);
                     this.setLoading(false);
                     this.handleAuthError(error, 'Google sign-in failed');
                 }
@@ -1120,13 +1132,14 @@
                 this.setLoading(true, 'facebook-btn', 'Signing in with Facebook...');
                 
                 try {
-                    const firebase = await window.FirebaseManager.initialize();
+                    // ✅ Utiliser l'API thread-safe du FirebaseManager
+                    const firebase = this.firebaseManager.firebaseAuth;
                     if (!firebase) throw new Error('Firebase not available');
                     
                     try {
                         await firebase.signInWithPopup(firebase.auth, firebase.facebookProvider);
                     } catch (popupError) {
-                        console.log('🔄 Popup bloqué, utilisation redirect...', popupError.code);
+                        console.log('🔄 Popup blocked, using redirect...', popupError.code);
                         if (popupError.code === 'auth/popup-blocked' || 
                             popupError.code === 'auth/popup-closed-by-user') {
                             await firebase.signInWithRedirect(firebase.auth, firebase.facebookProvider);
@@ -1135,11 +1148,13 @@
                         throw popupError;
                     }
                 } catch (error) {
-                    console.error('Error Facebook sign-in:', error);
+                    console.error('❌ Facebook sign-in error:', error);
                     this.setLoading(false);
                     this.handleAuthError(error, 'Facebook sign-in failed');
                 }
             },
+
+            // ============= EMAIL AUTHENTICATION =============
 
             handleLoginSubmit: async function(event) {
                 event.preventDefault();
@@ -1154,14 +1169,15 @@
                     
                     this.setLoading(true, 'login-submit');
                     
-                    const firebase = await window.FirebaseManager.initialize();
+                    // ✅ Utiliser l'API thread-safe du FirebaseManager
+                    const firebase = this.firebaseManager.firebaseAuth;
                     if (!firebase) throw new Error('Firebase not available');
                     
                     await firebase.signInWithEmailAndPassword(firebase.auth, email, password);
                     
                     this.loginAttempts = 0;
                 } catch (error) {
-                    console.error('Error login:', error);
+                    console.error('❌ Login error:', error);
                     this.loginAttempts++;
                     this.setLoading(false);
                     this.handleAuthError(error, 'Login failed');
@@ -1188,7 +1204,8 @@
                     
                     this.setLoading(true, 'signup-submit');
                     
-                    const firebase = await window.FirebaseManager.initialize();
+                    // ✅ Utiliser l'API thread-safe du FirebaseManager
+                    const firebase = this.firebaseManager.firebaseAuth;
                     if (!firebase) throw new Error('Firebase not available');
                     
                     const userCredential = await firebase.createUserWithEmailAndPassword(firebase.auth, email, password);
@@ -1199,11 +1216,36 @@
                         });
                     }
                 } catch (error) {
-                    console.error('Error signup:', error);
+                    console.error('❌ Signup error:', error);
                     this.setLoading(false);
                     this.handleAuthError(error, 'Account creation failed');
                 }
             },
+
+            showForgotPassword: async function() {
+                const email = prompt('Enter your email address:');
+                if (!email || !email.trim()) return;
+                
+                const trimmedEmail = email.trim();
+                if (!this.isValidEmail(trimmedEmail)) {
+                    this.showError('Please enter a valid email address');
+                    return;
+                }
+                
+                try {
+                    // ✅ Utiliser l'API thread-safe du FirebaseManager
+                    const firebase = this.firebaseManager.firebaseAuth;
+                    if (!firebase) throw new Error('Firebase not available');
+                    
+                    await firebase.sendPasswordResetEmail(firebase.auth, trimmedEmail);
+                    this.showSuccess(`Password reset email sent to ${trimmedEmail}`);
+                } catch (error) {
+                    console.error('❌ Password reset error:', error);
+                    this.handleAuthError(error, 'Failed to send password reset email');
+                }
+            },
+
+            // ============= FORM VALIDATION =============
 
             validateLoginForm: function(email, password) {
                 let isValid = true;
@@ -1376,6 +1418,8 @@
                 return levels[0];
             },
 
+            // ============= ERROR HANDLING =============
+
             handleAuthError: function(error, fallbackMessage) {
                 let message = fallbackMessage;
                 
@@ -1418,6 +1462,8 @@
                 
                 this.showError(message);
             },
+
+            // ============= UI MANAGEMENT =============
 
             switchToLogin: function() {
                 this.isLoginMode = true;
@@ -1510,28 +1556,6 @@
                     });
                     
                     this.updateUI();
-                }
-            },
-
-            showForgotPassword: async function() {
-                const email = prompt('Enter your email address:');
-                if (!email || !email.trim()) return;
-                
-                const trimmedEmail = email.trim();
-                if (!this.isValidEmail(trimmedEmail)) {
-                    this.showError('Please enter a valid email address');
-                    return;
-                }
-                
-                try {
-                    const firebase = await window.FirebaseManager.initialize();
-                    if (!firebase) throw new Error('Firebase not available');
-                    
-                    await firebase.sendPasswordResetEmail(firebase.auth, trimmedEmail);
-                    this.showSuccess(`Password reset email sent to ${trimmedEmail}`);
-                } catch (error) {
-                    console.error('Error password reset:', error);
-                    this.handleAuthError(error, 'Failed to send password reset email');
                 }
             },
 
@@ -1662,18 +1686,41 @@
             clearAlerts: function() {
                 const alerts = document.querySelectorAll('.alert');
                 alerts.forEach(alert => alert.classList.remove('show'));
+            },
+
+            // ============= CLEANUP =============
+
+            cleanup: function() {
+                try {
+                    if (this.authUnsubscribe) {
+                        this.authUnsubscribe();
+                        this.authUnsubscribe = null;
+                    }
+                    
+                    this.currentUser = null;
+                    this.firebaseManager = null;
+                    this.isInitialized = false;
+                    
+                    console.log('🧹 AuthManager cleanup completed');
+                } catch (error) {
+                    console.error('❌ Error during AuthManager cleanup:', error);
+                }
             }
         };
+
+        // ============= INITIALIZATION =============
 
         document.addEventListener('DOMContentLoaded', function() {
             try {
                 AuthManager.init();
             } catch (error) {
-                console.error('Error initializing Auth page:', error);
+                console.error('❌ Error initializing Auth page V2:', error);
             }
         });
 
         window.AuthManager = AuthManager;
+        
+        console.log('✅ Auth page V2 loaded - Thread-safe with FirebaseManager V2');
     </script>
 </body>
 </html>

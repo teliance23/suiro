@@ -91,6 +91,45 @@
     }
 
     class FirebaseManager {
+        static instance = null;
+        static initLock = null;
+        static isInitializing = false;
+
+        static async getInstance() {
+            if (FirebaseManager.instance) {
+                return FirebaseManager.instance;
+            }
+            
+            if (FirebaseManager.initLock) {
+                return FirebaseManager.initLock;
+            }
+            
+            if (FirebaseManager.isInitializing) {
+                return new Promise((resolve) => {
+                    const checkReady = () => {
+                        if (FirebaseManager.instance) {
+                            resolve(FirebaseManager.instance);
+                        } else {
+                            setTimeout(checkReady, 50);
+                        }
+                    };
+                    checkReady();
+                });
+            }
+            
+            FirebaseManager.isInitializing = true;
+            FirebaseManager.initLock = new FirebaseManager()._performInitialization();
+            
+            try {
+                const instance = await FirebaseManager.initLock;
+                FirebaseManager.instance = instance;
+                return instance;
+            } finally {
+                FirebaseManager.initLock = null;
+                FirebaseManager.isInitializing = false;
+            }
+        }
+
         constructor() {
             this.authState = 'initializing';
             this.authMutex = false;
@@ -123,32 +162,19 @@
             this.userDataCache = new LRUCache(50);
             this.cacheTimeout = 5 * 60 * 1000;
             
-            console.log('🔥 Firebase Manager Singleton créé - Cache LRU activé');
+            this.callbackDebounce = null;
+            this.lastAuthUpdate = null;
         }
 
         async initialize() {
-            if (this.initialized && this.firebaseAuth) {
-                console.log('🔥 Firebase déjà initialisé - utilisation du singleton');
-                return this.firebaseAuth;
-            }
-            
-            if (this.initPromise) {
-                console.log('🔥 Firebase en cours d\'initialisation - attente...');
-                return this.initPromise;
-            }
-            
-            console.log('🔥 Démarrage initialisation Firebase...');
-            this.initPromise = this._loadFirebase();
-            return this.initPromise;
+            return FirebaseManager.getInstance();
         }
 
-        async _loadFirebase() {
+        async _performInitialization() {
             this.isLoading = true;
             this.hasError = false;
             
             try {
-                console.log('🔥 Chargement modules Firebase...');
-                
                 const firebaseConfig = {
                     apiKey: "AIzaSyD-0wrtBrV-RyZVtjz6cZgumvsoRIJ07b",
                     authDomain: "suirodoku-web.firebaseapp.com",
@@ -183,11 +209,7 @@
                 ] = await Promise.race([Promise.all(importPromises), timeoutPromise]);
 
                 this.app = initializeApp(firebaseConfig);
-                
-                console.log('🔧 Configuration Auth simplifiée et robuste...');
                 this.auth = getAuth(this.app);
-                console.log('✅ Auth initialisé avec configuration standard');
-                
                 this.db = getFirestore(this.app);
                 this.storage = getStorage(this.app);
 
@@ -199,9 +221,6 @@
                             ssl: true,
                             cacheSizeBytes: 10485760,
                         });
-                        console.log('✅ Firestore configuré avec settings avancés');
-                    } else {
-                        console.log('ℹ️ Firestore utilise la configuration par défaut');
                     }
                 } catch (error) {
                     console.warn('⚠️ Settings Firestore non appliqués (pas critique):', error.code);
@@ -218,7 +237,6 @@
                         prompt: 'select_account',
                         redirect_uri: window.location.origin + window.location.pathname
                     });
-                    console.log('✅ Google Provider configuré (optimisé COOP)');
                 } catch (error) {
                     console.warn('⚠️ Erreur configuration Google Provider:', error);
                 }
@@ -231,7 +249,6 @@
                         display: 'page',
                         auth_type: 'rerequest'
                     });
-                    console.log('✅ Facebook Provider configuré (optimisé COOP)');
                 } catch (error) {
                     console.warn('⚠️ Erreur configuration Facebook Provider:', error);
                 }
@@ -268,7 +285,7 @@
                     getDownloadURL
                 };
 
-                this._setupAuthStateListener();
+                await this._setupAuthStateListener();
                 
                 window.firebaseAuth = this.firebaseAuth;
                 
@@ -276,22 +293,19 @@
                 this.isLoading = false;
                 this.retryCount = 0;
                 
-                console.log('✅ Firebase Manager initialisé avec succès !');
-                return this.firebaseAuth;
+                return this;
                 
             } catch (error) {
                 console.error('❌ Erreur Firebase Manager:', error);
                 
                 this.isLoading = false;
                 this.hasError = true;
-                this.initPromise = null;
                 
                 if (this.retryCount < this.config.maxRetries) {
                     this.retryCount++;
-                    console.log(`🔄 Retry ${this.retryCount}/${this.config.maxRetries} dans ${this.config.retryDelay}ms...`);
                     
                     await this._delay(this.config.retryDelay * this.retryCount);
-                    return this.initialize();
+                    return this._performInitialization();
                 }
                 
                 console.error('🚫 Firebase Manager - Tous les retries échoués');
@@ -303,7 +317,6 @@
             const { onAuthStateChanged } = this.firebaseAuth;
             
             await this._waitForAuthReady();
-            
             await this._checkRedirectResultSafely();
             
             onAuthStateChanged(this.auth, async (user) => {
@@ -326,15 +339,17 @@
 
         async _handleAuthStateChangeSafely(user) {
             if (this.authMutex) {
-                console.log('🔒 Auth state change en cours, skipping...');
                 return;
             }
             
             this.authMutex = true;
             
             try {
-                console.log('🔥 Auth state change - processing safely:', user ? user.email : 'déconnecté');
+                if (this.lastAuthUpdate && Date.now() - this.lastAuthUpdate < 100) {
+                    return;
+                }
                 
+                this.lastAuthUpdate = Date.now();
                 this.currentUser = user;
                 
                 if (user) {
@@ -382,25 +397,29 @@
             } catch (error) {
                 this.userDataLoadingPromise = null;
                 
-                console.error(`❌ Erreur chargement données utilisateur (attempt ${retryCount + 1}):`, error);
-                
                 if (retryCount < maxRetries) {
                     await this._delay(1000 * Math.pow(2, retryCount));
                     return this._loadUserDataSafely(user, retryCount + 1);
                 }
                 
-                console.warn('⚠️ Fallback vers données Firebase de base');
                 return user;
             }
         }
 
         async _notifyAuthCallbacksSafely(user, userData, error = null) {
+            clearTimeout(this.callbackDebounce);
+            this.callbackDebounce = setTimeout(async () => {
+                await this._executeCallbacksSequentially(user, userData, error);
+            }, 50);
+        }
+
+        async _executeCallbacksSequentially(user, userData, error) {
             const callbackPromises = this.authCallbacks.map(async (callback, index) => {
                 try {
                     await Promise.race([
                         callback(user, userData, error),
                         new Promise((_, reject) => 
-                            setTimeout(() => reject(new Error('Callback timeout')), 5000)
+                            setTimeout(() => reject(new Error('Callback timeout')), 3000)
                         )
                     ]);
                 } catch (callbackError) {
@@ -414,7 +433,6 @@
         async _checkRedirectResultSafely() {
             try {
                 if (!this.firebaseAuth?.getRedirectResult) {
-                    console.log('ℹ️ getRedirectResult non disponible');
                     return;
                 }
                 
@@ -428,10 +446,7 @@
                 ]);
                 
                 if (result && result.user) {
-                    console.log('✅ Redirection OAuth réussie:', result.user.email);
                     this._cleanOAuthURLSafely(true);
-                } else {
-                    console.log('ℹ️ Aucune redirection OAuth en attente');
                 }
                 
             } catch (error) {
@@ -442,9 +457,7 @@
                     'auth/timeout'
                 ];
                 
-                if (expectedErrors.includes(error.code) || error.message.includes('timeout')) {
-                    console.log('ℹ️ Pas de redirection OAuth (normal):', error.code);
-                } else {
+                if (!expectedErrors.includes(error.code) && !error.message.includes('timeout')) {
                     console.warn('⚠️ Erreur inattendue redirect check:', error);
                 }
             }
@@ -453,7 +466,6 @@
         _cleanOAuthURLSafely(hasRedirectResult = false) {
             try {
                 const url = new URL(window.location.href);
-                let hasOAuthParams = false;
                 
                 if (!hasRedirectResult) {
                     return;
@@ -465,10 +477,10 @@
                 const hasFacebookParams = url.searchParams.has('code') && url.searchParams.has('state');
                 
                 if (!hasGoogleParams && !hasFacebookParams) {
-                    console.log('ℹ️ Pas de paramètres OAuth détectés');
                     return;
                 }
                 
+                let hasOAuthParams = false;
                 oauthParams.forEach(param => {
                     if (url.searchParams.has(param)) {
                         url.searchParams.delete(param);
@@ -479,7 +491,6 @@
                 if (hasOAuthParams) {
                     const newUrl = url.pathname + (url.search || '');
                     window.history.replaceState({}, document.title, newUrl);
-                    console.log('🧹 URL OAuth nettoyée de façon sécurisée');
                 }
                 
             } catch (error) {
@@ -527,13 +538,10 @@
                 }, 0);
             }
             
-            console.log(`🔥 Callback auth ajouté - Total: ${this.authCallbacks.length}`);
-            
             return () => {
                 const index = this.authCallbacks.indexOf(callback);
                 if (index > -1) {
                     this.authCallbacks.splice(index, 1);
-                    console.log(`🔥 Callback auth supprimé - Total: ${this.authCallbacks.length}`);
                 }
             };
         }
@@ -544,7 +552,6 @@
                 
                 const cached = this.userDataCache.get(user.uid);
                 if (cached && (Date.now() - cached.timestamp) < this.cacheTimeout) {
-                    console.log('📋 Données utilisateur depuis le cache LRU');
                     return cached.data;
                 }
                 
@@ -555,14 +562,11 @@
                 if (userDoc.exists()) {
                     userData = { ...user, ...userDoc.data() };
                 } else {
-                    console.log('🔧 Création profil par défaut pour:', user.email);
                     const defaultProfile = this.createDefaultProfile(user);
                     
                     await this.firebaseAuth.setDoc(userRef, defaultProfile);
                     
                     userData = { ...user, ...defaultProfile };
-                    
-                    console.log('✅ Profil par défaut créé avec uid pour:', user.email);
                 }
                 
                 this.userDataCache.set(user.uid, {
@@ -570,7 +574,6 @@
                     timestamp: Date.now()
                 });
                 
-                console.log('✅ Données utilisateur chargées et mises en cache LRU');
                 return userData;
                 
             } catch (error) {
@@ -641,7 +644,6 @@
                 
                 this.invalidateUserCache(userId);
                 
-                console.log('✅ Données utilisateur mises à jour');
                 return true;
                 
             } catch (error) {
@@ -652,12 +654,10 @@
 
         invalidateUserCache(userId) {
             this.userDataCache.delete(userId);
-            console.log('🗑️ Cache utilisateur invalidé:', userId);
         }
 
         _clearUserCache() {
             this.userDataCache.clear();
-            console.log('🗑️ Cache utilisateur vidé');
         }
 
         async signInWithGoogle() {
@@ -665,8 +665,6 @@
                 if (!this.firebaseAuth?.googleProvider) {
                     throw new Error('Google Provider non disponible');
                 }
-
-                console.log('🔐 Connexion Google via redirect (optimisé COOP)...');
                 
                 await this.firebaseAuth.signInWithRedirect(this.auth, this.firebaseAuth.googleProvider);
                 
@@ -681,8 +679,6 @@
                 if (!this.firebaseAuth?.facebookProvider) {
                     throw new Error('Facebook Provider non disponible');
                 }
-
-                console.log('🔐 Connexion Facebook via redirect (optimisé COOP)...');
                 
                 await this.firebaseAuth.signInWithRedirect(this.auth, this.firebaseAuth.facebookProvider);
                 
@@ -698,13 +694,10 @@
                     throw new Error('Google Provider non disponible');
                 }
 
-                console.log('🔐 Tentative connexion Google (popup)...');
                 const result = await this.firebaseAuth.signInWithPopup(this.auth, this.firebaseAuth.googleProvider);
-                console.log('✅ Connexion Google réussie (popup)');
                 return result;
                 
             } catch (error) {
-                console.warn('⚠️ Popup Google bloqué par COOP:', error.code);
                 return this.signInWithGoogle();
             }
         }
@@ -715,13 +708,10 @@
                     throw new Error('Facebook Provider non disponible');
                 }
 
-                console.log('🔐 Tentative connexion Facebook (popup)...');
                 const result = await this.firebaseAuth.signInWithPopup(this.auth, this.firebaseAuth.facebookProvider);
-                console.log('✅ Connexion Facebook réussie (popup)');
                 return result;
                 
             } catch (error) {
-                console.warn('⚠️ Popup Facebook bloqué par COOP:', error.code);
                 return this.signInWithFacebook();
             }
         }
@@ -747,13 +737,14 @@
         }
 
         async retry() {
-            console.log('🔄 Force retry Firebase Manager...');
+            FirebaseManager.instance = null;
+            FirebaseManager.initLock = null;
+            FirebaseManager.isInitializing = false;
             this.initialized = false;
-            this.initPromise = null;
             this.hasError = false;
             this.retryCount = 0;
             
-            return this.initialize();
+            return FirebaseManager.getInstance();
         }
 
         async signOut() {
@@ -763,7 +754,6 @@
                 }
                 
                 await this.firebaseAuth.signOut(this.auth);
-                console.log('✅ Déconnexion réussie via Firebase Manager');
                 
                 this.navigateToHome();
                 return true;
@@ -784,7 +774,6 @@
             const depth = segments.length;
             const prefix = depth > 0 ? '../'.repeat(depth) : './';
             
-            console.log(`📍 Profondeur: ${depth}, Préfixe: "${prefix}"`);
             return prefix;
         }
 
@@ -814,7 +803,6 @@
                     return;
                 }
                 
-                console.log(`🧭 Navigation: ${page} → ${destination}`);
                 window.location.href = destination;
                 
             } catch (error) {
@@ -828,7 +816,6 @@
                 const prefix = this.getPathPrefix();
                 const homeUrl = prefix === './' ? './' : prefix.slice(0, -1);
                 
-                console.log(`🏠 Retour accueil: ${homeUrl}`);
                 window.location.href = homeUrl || './';
                 
             } catch (error) {
@@ -857,7 +844,6 @@
                 }
                 
                 const path = prefix + routes[page];
-                console.log(`🔗 Navigation path: ${page} → ${path}`);
                 return path;
                 
             } catch (error) {
@@ -924,22 +910,24 @@
             console.log('Current User:', this.currentUser);
             console.log('Auth Callbacks:', this.authCallbacks.length);
             console.log('Cache Stats:', this.getCacheStats());
-            console.log('Firebase Auth Object:', this.firebaseAuth);
+            console.log('Singleton Instance:', !!FirebaseManager.instance);
+            console.log('Init Lock:', !!FirebaseManager.initLock);
+            console.log('Is Initializing:', FirebaseManager.isInitializing);
             console.groupEnd();
         }
     }
 
-    window.FirebaseManager = new FirebaseManager();
+    window.FirebaseManager = FirebaseManager;
     
-    window.initFirebase = () => window.FirebaseManager.initialize();
-    window.signOutUser = () => window.FirebaseManager.signOut();
-    window.getUserData = (user) => window.FirebaseManager._getUserDataWithCache(user);
-    window.getDisplayName = (userData) => window.FirebaseManager.getDisplayName(userData);
-    window.getFlagEmoji = (countryCode) => window.FirebaseManager.getFlagEmoji(countryCode);
-    window.isProfileComplete = (userData) => window.FirebaseManager.isProfileComplete(userData);
-    window.navigateTo = (page) => window.FirebaseManager.navigateTo(page);
-    window.goToHome = () => window.FirebaseManager.navigateToHome();
-    window.getNavigationPath = (page) => window.FirebaseManager.getNavigationPath(page);
+    window.initFirebase = () => FirebaseManager.getInstance();
+    window.signOutUser = () => FirebaseManager.getInstance().then(fm => fm.signOut());
+    window.getUserData = (user) => FirebaseManager.getInstance().then(fm => fm._getUserDataWithCache(user));
+    window.getDisplayName = (userData) => FirebaseManager.getInstance().then(fm => fm.getDisplayName(userData));
+    window.getFlagEmoji = (countryCode) => FirebaseManager.getInstance().then(fm => fm.getFlagEmoji(countryCode));
+    window.isProfileComplete = (userData) => FirebaseManager.getInstance().then(fm => fm.isProfileComplete(userData));
+    window.navigateTo = (page) => FirebaseManager.getInstance().then(fm => fm.navigateTo(page));
+    window.goToHome = () => FirebaseManager.getInstance().then(fm => fm.navigateToHome());
+    window.getNavigationPath = (page) => FirebaseManager.getInstance().then(fm => fm.getNavigationPath(page));
 
     function needsFirebase() {
         const firebaseSelectors = [
@@ -964,25 +952,16 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         if (needsFirebase()) {
-            console.log('🔥 Page nécessite Firebase - Auto-initialisation...');
-            window.FirebaseManager.initialize().catch(error => {
+            FirebaseManager.getInstance().catch(error => {
                 console.error('❌ Échec auto-initialisation Firebase Manager:', error);
             });
-        } else {
-            console.log('ℹ️ Page statique - Firebase Manager en standby');
         }
     });
 
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        window.debugFirebaseManager = () => window.FirebaseManager.debug();
-        window.retryFirebaseManager = () => window.FirebaseManager.retry();
-        window.firebaseManagerStats = () => window.FirebaseManager.getCacheStats();
-        console.log('🔧 Mode debug Firebase Manager activé');
-        console.log('  - window.debugFirebaseManager() pour débugger');
-        console.log('  - window.retryFirebaseManager() pour retry');
-        console.log('  - window.firebaseManagerStats() pour stats cache');
+        window.debugFirebaseManager = () => FirebaseManager.getInstance().then(fm => fm.debug());
+        window.retryFirebaseManager = () => FirebaseManager.getInstance().then(fm => fm.retry());
+        window.firebaseManagerStats = () => FirebaseManager.getInstance().then(fm => fm.getCacheStats());
     }
-
-    console.log('🔥 Firebase Manager Singleton ready - Optimisé et stable ✅');
 
 })();

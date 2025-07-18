@@ -1,6 +1,6 @@
 // ============= SHARED/FIREBASE-MANAGER.JS - SINGLETON CENTRALISÉ =============
 // Solution complète pour éliminer les race conditions et unifier Firebase
-// VERSION CORRIGÉE avec getNavigationPath() ajoutée
+// VERSION CORRIGÉE avec signInWithRedirect et getRedirectResult ajoutés
 
 (function() {
     'use strict';
@@ -174,7 +174,7 @@
                 
                 // Configuration Firebase
                 const firebaseConfig = {
-                    apiKey: "AIzaSyDHP3A6BZXAx72fY0_BFJQe9y1F2Za_Xo8",
+                    apiKey: "AIzaSyD-0wrtBrV-RyZVtjz6cZgumvsoRIJ07bY",
                     authDomain: "suirodoku-web.firebaseapp.com",
                     projectId: "suirodoku-web",
                     storageBucket: "suirodoku-web.firebasestorage.app",
@@ -200,7 +200,8 @@
                     { initializeApp },
                     { getAuth, onAuthStateChanged, signOut, updateProfile,
                       createUserWithEmailAndPassword, signInWithEmailAndPassword,
-                      signInWithPopup, GoogleAuthProvider, FacebookAuthProvider,
+                      signInWithPopup, signInWithRedirect, getRedirectResult,
+                      GoogleAuthProvider, FacebookAuthProvider,
                       sendPasswordResetEmail },
                     { getFirestore, doc, getDoc, setDoc, updateDoc,
                       collection, getDocs, query, orderBy, limit, where, startAfter },
@@ -240,13 +241,15 @@
                     db: this.db,
                     storage: this.storage,
                     
-                    // Auth methods
+                    // Auth methods - 🔧 CORRIGÉ: ajout de signInWithRedirect et getRedirectResult
                     onAuthStateChanged,
                     signOut,
                     updateProfile,
                     createUserWithEmailAndPassword,
                     signInWithEmailAndPassword,
                     signInWithPopup,
+                    signInWithRedirect,        // 🔧 AJOUTÉ
+                    getRedirectResult,         // 🔧 AJOUTÉ
                     sendPasswordResetEmail,
                     googleProvider,
                     facebookProvider,
@@ -281,7 +284,7 @@
                 this.isLoading = false;
                 this.retryCount = 0;
                 
-                console.log('✅ Firebase Manager initialisé avec succès !');
+                console.log('✅ Firebase Manager initialisé avec succès ! (avec signInWithRedirect)');
                 return this.firebaseAuth;
                 
             } catch (error) {
@@ -403,7 +406,10 @@
                 if (userDoc.exists()) {
                     userData = { ...user, ...userDoc.data() };
                 } else {
-                    userData = user;
+                    // 🔧 NOUVEAU: Créer automatiquement le profil par défaut
+                    userData = { ...user, ...this.createDefaultProfile(user) };
+                    await this.firebaseAuth.setDoc(userRef, this.createDefaultProfile(user));
+                    console.log('✅ Profil par défaut créé pour:', user.email);
                 }
                 
                 // Mettre en cache LRU
@@ -419,6 +425,55 @@
                 console.error('❌ Erreur _getUserDataWithCache:', error);
                 return user;
             }
+        }
+
+        /**
+         * 🔧 NOUVEAU: Crée un profil par défaut pour un nouvel utilisateur
+         * @param {Object} user - L'objet utilisateur Firebase
+         * @returns {Object} - Le profil par défaut
+         */
+        createDefaultProfile(user) {
+            return {
+                displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+                email: user.email,
+                profile: {
+                    isProfileComplete: true,
+                    displayPreference: 'realname',
+                    joinDate: new Date(),
+                    gamertag: '',
+                    nationality: ''
+                },
+                privacy: {
+                    profileVisibility: 'public',
+                    showInLeaderboards: true
+                },
+                improvedStats: {
+                    totalGames: 0,
+                    practice: {
+                        gamesPlayed: 0,
+                        gamesCompleted: 0,
+                        totalScore: 0,
+                        bestScores: {
+                            easy: 0,
+                            medium: 0,
+                            hard: 0,
+                            expert: 0,
+                            master: 0
+                        }
+                    },
+                    ranked: {
+                        gamesPlayed: 0,
+                        gamesCompleted: 0,
+                        currentRating: 1000,
+                        winStreak: 0
+                    },
+                    totalPlayTime: 0,
+                    lastPlayed: null
+                },
+                achievements: [],
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
         }
 
         /**
@@ -620,7 +675,7 @@
         }
 
         /**
-         * 🔧 FIX: Obtient le chemin de navigation pour une page donnée
+         * Obtient le chemin de navigation pour une page donnée
          * @param {string} page - La page de destination
          * @returns {string} Le chemin complet vers la page
          */
@@ -751,8 +806,6 @@
     window.isProfileComplete = (userData) => window.FirebaseManager.isProfileComplete(userData);
     window.navigateTo = (page) => window.FirebaseManager.navigateTo(page);
     window.goToHome = () => window.FirebaseManager.navigateToHome();
-    
-    // 🔧 FIX: Alias global corrigé pour getNavigationPath
     window.getNavigationPath = (page) => window.FirebaseManager.getNavigationPath(page);
 
     // Auto-initialisation pour les pages qui en ont besoin
@@ -800,6 +853,6 @@
         console.log('  - window.firebaseManagerStats() pour stats cache');
     }
 
-    console.log('🔥 Firebase Manager Singleton ready - Méthode getNavigationPath() ajoutée ✅');
+    console.log('🔥 Firebase Manager Singleton ready - signInWithRedirect et getRedirectResult ajoutés ✅');
 
 })();

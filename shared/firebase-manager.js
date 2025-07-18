@@ -1,6 +1,6 @@
 // ============= SHARED/FIREBASE-MANAGER.JS - SINGLETON CENTRALISÉ =============
 // Solution complète pour éliminer les race conditions et unifier Firebase
-// NOUVEAU FICHIER À CRÉER : shared/firebase-manager.js
+// VERSION CORRIGÉE avec getNavigationPath() ajoutée
 
 (function() {
     'use strict';
@@ -619,6 +619,40 @@
             }
         }
 
+        /**
+         * 🔧 FIX: Obtient le chemin de navigation pour une page donnée
+         * @param {string} page - La page de destination
+         * @returns {string} Le chemin complet vers la page
+         */
+        getNavigationPath(page) {
+            try {
+                const prefix = this.getPathPrefix();
+                
+                const routes = {
+                    'home': '',
+                    'auth': 'auth/',
+                    'profile': 'profile/',
+                    'settings': 'settings/',
+                    'tutorial': 'tutorial/',
+                    'leaderboard': 'leaderboard/',
+                    'legal': 'legal/'
+                };
+                
+                if (!routes.hasOwnProperty(page)) {
+                    console.warn(`🚫 Route inconnue: ${page}`);
+                    return prefix;
+                }
+                
+                const path = prefix + routes[page];
+                console.log(`🔗 Navigation path: ${page} → ${path}`);
+                return path;
+                
+            } catch (error) {
+                console.error('❌ Erreur getNavigationPath:', error);
+                return './';
+            }
+        }
+
         // ============= FONCTIONS UTILITAIRES =============
         
         /**
@@ -717,19 +751,9 @@
     window.isProfileComplete = (userData) => window.FirebaseManager.isProfileComplete(userData);
     window.navigateTo = (page) => window.FirebaseManager.navigateTo(page);
     window.goToHome = () => window.FirebaseManager.navigateToHome();
-    window.getNavigationPath = (page) => {
-        const prefix = window.FirebaseManager.getPathPrefix();
-        const routes = {
-            'home': '',
-            'auth': 'auth/',
-            'profile': 'profile/',
-            'settings': 'settings/',
-            'tutorial': 'tutorial/',
-            'leaderboard': 'leaderboard/',
-            'legal': 'legal/'
-        };
-        return prefix + (routes[page] || '');
-    };
+    
+    // 🔧 FIX: Alias global corrigé pour getNavigationPath
+    window.getNavigationPath = (page) => window.FirebaseManager.getNavigationPath(page);
 
     // Auto-initialisation pour les pages qui en ont besoin
     function needsFirebase() {
@@ -776,6 +800,6 @@
         console.log('  - window.firebaseManagerStats() pour stats cache');
     }
 
-    console.log('🔥 Firebase Manager Singleton ready - Tous les bugs fixes intégrés');
+    console.log('🔥 Firebase Manager Singleton ready - Méthode getNavigationPath() ajoutée ✅');
 
 })();

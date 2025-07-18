@@ -1,5 +1,3 @@
-// ============= SCRIPT.JS ALLÉGÉ - JEU PUR SEULEMENT =============
-
 const GAME_CONFIG = {
     difficulties: {
         easy: { name: 'Easy', hintsCount: 74, initialScore: 2000, errorPenalty: 300, hintPenalty: 150, timeDecrement: 1 },
@@ -43,23 +41,142 @@ const gameState = {
 let gameTimer = null;
 let currentUser = null;
 let gameManager;
+let firebaseManager = null;
 
-// ============= GAME MANAGER =============
+class FirebaseGameInterface {
+    constructor() {
+        this.saveInProgress = false;
+        this.operationQueue = [];
+        this.isInitialized = false;
+        this.lastSaveTime = 0;
+        this.saveDebounceDelay = 1000;
+    }
+
+    async ensureFirebaseReady() {
+        try {
+            if (!firebaseManager) {
+                firebaseManager = await window.FirebaseManager.getInstance();
+                this.isInitialized = true;
+            }
+            return firebaseManager;
+        } catch (error) {
+            console.warn('Firebase not available:', error);
+            return null;
+        }
+    }
+
+    async saveAbandonIfNeededV2() {
+        if (this.saveInProgress || !gameState.gameInProgress || gameState.time < 60) {
+            return;
+        }
+
+        this.saveInProgress = true;
+
+        try {
+            const firebaseManager = await this.ensureFirebaseReady();
+            if (!firebaseManager || !currentUser) {
+                return;
+            }
+
+            return firebaseManager.operationQueue.enqueue(async () => {
+                console.log('💾 Saving abandoned game...');
+                const gameData = gameManager.createGameData('abandoned');
+                await this.updateStatsThreadSafe(gameData);
+            });
+
+        } catch (error) {
+            console.error('❌ Error saveAbandonIfNeededV2:', error);
+        } finally {
+            this.saveInProgress = false;
+        }
+    }
+
+    async updateStatsThreadSafe(gameData) {
+        try {
+            const firebaseManager = await this.ensureFirebaseReady();
+            if (!firebaseManager || !currentUser) {
+                return { success: false, message: 'Not logged in' };
+            }
+
+            return firebaseManager.operationQueue.enqueue(async () => {
+                const result = await this.statsManager.updateStats(gameData);
+                console.log('📊 Stats updated:', result);
+                return result;
+            });
+
+        } catch (error) {
+            console.error('❌ Error updateStatsThreadSafe:', error);
+            return { success: false, message: 'Failed to save statistics' };
+        }
+    }
+
+    async setupAuthStateV2() {
+        try {
+            const firebaseManager = await this.ensureFirebaseReady();
+            if (!firebaseManager) return;
+
+            firebaseManager.onAuthStateChanged((user, userData) => {
+                currentUser = user;
+
+                if (typeof window.AuthHeader !== 'undefined' && window.AuthHeader.updateAuthState) {
+                    window.AuthHeader.updateAuthState(user, userData);
+                }
+
+                if (typeof window.MobileMenu !== 'undefined' && window.MobileMenu.syncWithAuthHeader) {
+                    window.MobileMenu.syncWithAuthHeader(userData || user);
+                }
+
+                console.log(user ? `✅ User logged in: ${user.email}` : '❌ User logged out');
+            });
+
+        } catch (error) {
+            console.error('❌ Error setupAuthStateV2:', error);
+        }
+    }
+
+    showMessage(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = 'stats-toast';
+        toast.textContent = message;
+        
+        const colors = {
+            success: '#28a745',
+            warning: '#ffc107',
+            error: '#dc3545',
+            info: '#007aff'
+        };
+        
+        toast.style.cssText = `
+            position: fixed; top: 20px; right: 20px; 
+            background: ${colors[type] || colors.info}; color: white;
+            padding: 12px 20px; border-radius: 8px; z-index: 10000; font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,122,255,0.3); animation: slideIn 0.3s ease-out;
+        `;
+        
+        document.body.appendChild(toast);
+        window.createSafeTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease-in';
+            window.createSafeTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+}
 
 class GameManager {
     constructor() {
         this.statsManager = new window.RankingStatsManager();
+        this.firebaseInterface = new FirebaseGameInterface();
+        this.firebaseInterface.statsManager = this.statsManager;
     }
     
     async startNewGame(difficulty, gameMode) {
-        await this.saveAbandonIfNeeded();
+        await this.firebaseInterface.saveAbandonIfNeededV2();
         
         const config = GAME_CONFIG.difficulties[difficulty];
         gameState.difficulty = difficulty;
         gameState.gameMode = gameMode;
         
         if (gameMode === 'ranked' && !currentUser) {
-            this.showMessage('Please log in to play ranked games', 'warning');
+            this.firebaseInterface.showMessage('Please log in to play ranked games', 'warning');
             return false;
         }
         
@@ -70,7 +187,7 @@ class GameManager {
         console.log(`🎮 New ${gameMode} game started - ${difficulty}`);
         
         if (gameMode === 'ranked') {
-            this.showMessage(`🏆 Ranked ${difficulty} game started! Good luck!`, 'info');
+            this.firebaseInterface.showMessage(`🏆 Ranked ${difficulty} game started! Good luck!`, 'info');
         }
         
         return true;
@@ -148,7 +265,7 @@ class GameManager {
         
         const gameData = this.createGameData(endType);
         
-        const result = await this.statsManager.updateStats(gameData);
+        const result = await this.firebaseInterface.updateStatsThreadSafe(gameData);
         
         if (endType === 'completed') {
             ModalManager.showVictory(gameData, result);
@@ -156,7 +273,7 @@ class GameManager {
             ModalManager.showDefeat(reason, gameData, result);
         }
         
-        if (result.success && result.message) {
+        if (result && result.success && result.message) {
             if (result.rankingChange > 0) {
                 window.showSuccess(result.message);
             } else if (result.rankingChange < 0) {
@@ -194,14 +311,6 @@ class GameManager {
         return Math.round(performance);
     }
     
-    async saveAbandonIfNeeded() {
-        if (gameState.gameInProgress && gameState.time >= 60) {
-            console.log('💾 Saving abandoned game...');
-            const gameData = this.createGameData('abandoned');
-            await this.statsManager.updateStats(gameData);
-        }
-    }
-    
     updateUI() {
         GridManager.updateDisplay();
         document.getElementById('score-display').textContent = gameState.score.toLocaleString();
@@ -210,38 +319,10 @@ class GameManager {
         document.getElementById('game-time').textContent = GameUtils.formatTime(gameState.time);
     }
     
-    showMessage(message, type = 'info') {
-        const toast = document.createElement('div');
-        toast.className = 'stats-toast';
-        toast.textContent = message;
-        
-        const colors = {
-            success: '#28a745',
-            warning: '#ffc107',
-            error: '#dc3545',
-            info: '#007aff'
-        };
-        
-        toast.style.cssText = `
-            position: fixed; top: 20px; right: 20px; 
-            background: ${colors[type] || colors.info}; color: white;
-            padding: 12px 20px; border-radius: 8px; z-index: 10000; font-weight: 600;
-            box-shadow: 0 4px 12px rgba(0,122,255,0.3); animation: slideIn 0.3s ease-out;
-        `;
-        
-        document.body.appendChild(toast);
-        window.createSafeTimeout(() => {
-            toast.style.animation = 'slideOut 0.3s ease-in';
-            window.createSafeTimeout(() => toast.remove(), 300);
-        }, 3000);
-    }
-    
     showNewGameModal() {
         ModalManager.showNewGameModal();
     }
 }
-
-// ============= GRID MANAGER =============
 
 class GridManager {
     static updateDisplay() {
@@ -430,8 +511,6 @@ class GridManager {
     }
 }
 
-// ============= MODAL MANAGER =============
-
 class ModalManager {
     static showVictory(gameData, result) {
         const modal = document.getElementById('victory-modal');
@@ -448,7 +527,7 @@ class ModalManager {
         this.addExtraStat(statsContainer, 'Game Mode', 
             gameData.gameMode === 'ranked' ? '🏆 Ranked' : '🎯 Practice');
         
-        if (gameData.gameMode === 'ranked' && result.rankingChange) {
+        if (gameData.gameMode === 'ranked' && result && result.rankingChange) {
             const pointsText = result.rankingChange > 0 ? 
                 `+${result.rankingChange} points` : 
                 `${result.rankingChange} points`;
@@ -466,7 +545,7 @@ class ModalManager {
         const performance = gameData.performance || 0;
         this.addExtraStat(statsContainer, 'Performance', `${performance}%`);
         
-        if (result.success) {
+        if (result && result.success) {
             this.addExtraStat(statsContainer, 'Statistics', '✅ Saved');
         }
         
@@ -493,7 +572,7 @@ class ModalManager {
         if (currentUser) {
             saveStatDiv.style.display = 'block';
             
-            if (gameData.gameMode === 'ranked' && result.rankingChange) {
+            if (gameData.gameMode === 'ranked' && result && result.rankingChange) {
                 const changeText = result.rankingChange < 0 ? 
                     `${result.rankingChange} points` : `+${result.rankingChange} points`;
                 saveStatusDiv.textContent = result.success ? changeText : '❌ Error';
@@ -502,11 +581,11 @@ class ModalManager {
                     saveStatusDiv.textContent += ` (Total: ${result.newTotal})`;
                 }
             } else {
-                saveStatusDiv.textContent = result.success ? '✅ Saved' : '❌ Error';
+                saveStatusDiv.textContent = result && result.success ? '✅ Saved' : '❌ Error';
             }
             
-            saveStatusDiv.style.color = result.success ? 
-                (result.rankingChange < 0 ? '#ff6b6b' : '#28a745') : '#dc3545';
+            saveStatusDiv.style.color = result && result.success ? 
+                (result.rankingChange && result.rankingChange < 0 ? '#ff6b6b' : '#28a745') : '#dc3545';
         } else {
             saveStatDiv.style.display = 'none';
         }
@@ -640,8 +719,6 @@ class ModalManager {
     }
 }
 
-// ============= SUDOKU GENERATOR =============
-
 class SudokuGenerator {
     static generate() {
         const modelGrid = [
@@ -750,8 +827,6 @@ class SudokuGenerator {
     }
 }
 
-// ============= UTILS =============
-
 class GameUtils {
     static getNumber(value) {
         if (!value) return '';
@@ -800,8 +875,6 @@ class GameUtils {
         return true;
     }
 }
-
-// ============= ERROR MANAGER =============
 
 class ErrorManager {
     static async setError(row, col) {
@@ -945,8 +1018,6 @@ class ErrorManager {
         if (cell) cell.classList.remove('error');
     }
 }
-
-// ============= INPUT MANAGER =============
 
 class InputManager {
     static handleInput(type, value) {
@@ -1126,24 +1197,10 @@ class InputManager {
     }
 }
 
-// ============= INITIALIZATION =============
-
 document.addEventListener('DOMContentLoaded', function() {
     gameManager = new GameManager();
     
-    window.FirebaseManager.onAuthStateChanged((user, userData) => {
-        currentUser = user;
-        
-        if (typeof window.AuthHeader !== 'undefined') {
-            window.AuthHeader.updateAuthState(user, userData);
-        }
-        
-        if (typeof window.MobileMenu !== 'undefined') {
-            window.MobileMenu.syncWithAuthHeader(userData || user);
-        }
-        
-        console.log(user ? `✅ User logged in: ${user.email}` : '❌ User logged out');
-    });
+    gameManager.firebaseInterface.setupAuthStateV2();
     
     createGrid();
     setupEventListeners();
@@ -1197,7 +1254,7 @@ function setupEventListeners() {
     document.getElementById('new-game-btn').addEventListener('click', () => ModalManager.showNewGameModal());
     document.getElementById('correct-btn').addEventListener('click', () => ErrorManager.correctError());
     document.getElementById('reveal-btn').addEventListener('click', async () => {
-        await gameManager.saveAbandonIfNeeded();
+        await gameManager.firebaseInterface.saveAbandonIfNeededV2();
         revealGrid();
     });
     document.getElementById('hint-btn').addEventListener('click', giveHint);
@@ -1307,11 +1364,19 @@ async function revealGrid() {
 }
 
 function navigateTo(page) {
-    window.FirebaseManager.navigateTo(page);
+    if (firebaseManager && firebaseManager.navigateTo) {
+        firebaseManager.navigateTo(page);
+    } else {
+        window.location.href = `./${page}/`;
+    }
 }
 
 function goToHome() {
-    window.FirebaseManager.navigateToHome();
+    if (firebaseManager && firebaseManager.navigateToHome) {
+        firebaseManager.navigateToHome();
+    } else {
+        window.location.href = './';
+    }
 }
 
 function openMobileMenu() {
@@ -1360,4 +1425,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-console.log('✅ Script.js clean loaded successfully - 800 lines of pure game logic!');
+console.log('✅ Script.js V2 loaded - Thread-Safe avec FirebaseManager V2');

@@ -207,6 +207,33 @@
                 font-size: 16px;
             }
 
+            .auth-loading {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px 18px;
+                color: #8e8e93;
+                font-size: 14px;
+                font-weight: 500;
+                min-width: 120px;
+                min-height: 40px;
+                justify-content: center;
+            }
+
+            .auth-loading-spinner {
+                width: 16px;
+                height: 16px;
+                border: 2px solid #e5e5ea;
+                border-top: 2px solid #8e8e93;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+
             .profile-incomplete-badge {
                 position: absolute;
                 top: -4px;
@@ -246,6 +273,12 @@
                     padding: 10px 20px;
                     font-size: 14px;
                     min-width: 100px;
+                }
+
+                .auth-loading {
+                    min-width: 100px;
+                    padding: 10px 14px;
+                    font-size: 13px;
                 }
             }
 
@@ -395,16 +428,13 @@
                 AuthHeaderState.isLoading = true;
                 AuthHeaderState.hasError = false;
                 
-                if (typeof window.LoadingManager !== 'undefined') {
-                    window.LoadingManager.show(desktopAuthButtons, 'Loading...');
-                } else {
-                    desktopAuthButtons.innerHTML = `
-                        <div style="display: flex; align-items: center; gap: 8px; padding: 12px 18px; color: #8e8e93;">
-                            <div style="width: 16px; height: 16px; border: 2px solid #e5e5ea; border-top: 2px solid #8e8e93; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                            <span>Loading...</span>
-                        </div>
-                    `;
-                }
+                // État de chargement avec dimensions fixes pour éviter layout shift
+                desktopAuthButtons.innerHTML = `
+                    <div class="auth-loading">
+                        <div class="auth-loading-spinner"></div>
+                        <span>Loading...</span>
+                    </div>
+                `;
             } catch (error) {
                 console.error('Error showLoadingState:', error);
                 this.showNotAuthenticatedState();

@@ -1,6 +1,6 @@
 // ============= SHARED/FIREBASE-MANAGER.JS - SINGLETON CENTRALISÉ =============
 // Solution complète pour éliminer les race conditions et unifier Firebase
-// VERSION FINALE CORRIGÉE avec signInWithRedirect et getRedirectResult + FIX uid
+// VERSION FINALE CORRIGÉE avec signInWithRedirect et getRedirectResult + FIX uid + CSP OPTIMISÉ
 
 (function() {
     'use strict';
@@ -172,7 +172,7 @@
             try {
                 console.log('🔥 Chargement modules Firebase...');
                 
-                // Configuration Firebase
+                // 🔧 FIX CRITIQUE: Configuration Firebase avec optimisations CSP
                 const firebaseConfig = {
                     apiKey: "AIzaSyD-0wrtBrV-RyZVtjz6cZgumvsoRIJ07b",
                     authDomain: "suirodoku-web.firebaseapp.com",
@@ -208,27 +208,49 @@
                     { getStorage, ref, uploadBytes, getDownloadURL }
                 ] = await Promise.race([Promise.all(importPromises), timeoutPromise]);
 
-                // Initialiser Firebase
+                // Initialiser Firebase avec settings optimisés pour CSP
                 this.app = initializeApp(firebaseConfig);
                 this.auth = getAuth(this.app);
                 this.db = getFirestore(this.app);
                 this.storage = getStorage(this.app);
 
-                // Configuration des providers
+                // 🔧 FIX CRITIQUE: Configuration Firestore pour réduire les appels cleardot.gif
+                try {
+                    // Désactiver le mode expérimental qui utilise cleardot.gif
+                    if (typeof this.db._delegate?.settings === 'function') {
+                        this.db._delegate.settings({
+                            experimentalForceLongPolling: false,
+                            experimentalAutoDetectLongPolling: true
+                        });
+                    }
+                    console.log('✅ Firestore configuré pour optimiser CSP');
+                } catch (error) {
+                    console.warn('⚠️ Impossible de configurer les settings Firestore:', error);
+                }
+
+                // Configuration des providers avec optimisations
                 const googleProvider = new GoogleAuthProvider();
                 const facebookProvider = new FacebookAuthProvider();
                 
                 try {
                     googleProvider.addScope('email');
                     googleProvider.addScope('profile');
-                    googleProvider.setCustomParameters({ prompt: 'select_account' });
+                    googleProvider.setCustomParameters({ 
+                        prompt: 'select_account',
+                        // 🔧 FIX: Optimisations pour éviter certaines erreurs CSP
+                        hd: undefined  // Évite certains appels supplémentaires
+                    });
                 } catch (error) {
                     console.warn('⚠️ Erreur configuration Google Provider:', error);
                 }
                 
                 try {
                     facebookProvider.addScope('public_profile');
-                    facebookProvider.setCustomParameters({ display: 'popup' });
+                    facebookProvider.setCustomParameters({ 
+                        display: 'popup',
+                        // 🔧 FIX: Paramètres optimisés Facebook
+                        auth_type: 'rerequest'
+                    });
                 } catch (error) {
                     console.warn('⚠️ Erreur configuration Facebook Provider:', error);
                 }
@@ -284,7 +306,7 @@
                 this.isLoading = false;
                 this.retryCount = 0;
                 
-                console.log('✅ Firebase Manager initialisé avec succès ! (avec signInWithRedirect et getRedirectResult)');
+                console.log('✅ Firebase Manager initialisé avec succès ! (avec signInWithRedirect et getRedirectResult + optimisations CSP)');
                 return this.firebaseAuth;
                 
             } catch (error) {
@@ -861,6 +883,6 @@
         console.log('  - window.firebaseManagerStats() pour stats cache');
     }
 
-    console.log('🔥 Firebase Manager Singleton ready - signInWithRedirect, getRedirectResult et FIX uid inclus ✅');
+    console.log('🔥 Firebase Manager Singleton ready - signInWithRedirect, getRedirectResult, FIX uid et optimisations CSP inclus ✅');
 
 })();

@@ -89,6 +89,42 @@
             align-items: flex-start;
         }
 
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            color: #4a5568;
+            letter-spacing: -0.8px;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-314px);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+
+        .nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: absolute;
+            left: 50%;
+            transform: translateX(40px);
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: 2px solid #e2e8f0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #4a5568;
+            cursor: pointer;
+            padding: 10px 20px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
         @media (max-width: 768px) {
             .header { display: none; }
             .sudoku-wrapper { 
@@ -452,28 +488,53 @@
     <script src="mobile/menu.js"></script>
     <script src="script.js"></script>
     
-    <!-- Initialisation simplifiée -->
+    <!-- Initialisation SÉCURISÉE avec vérification -->
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Utiliser Firebase Manager centralisé (Fix Bug #1)
-            window.FirebaseManager.onAuthStateChanged((user, userData) => {
-                // Mettre à jour header auth
-                if (typeof window.AuthHeader !== 'undefined') {
-                    window.AuthHeader.updateAuthState(user, userData);
-                }
-                
-                // Synchroniser avec menu mobile
-                if (typeof window.MobileMenu !== 'undefined') {
-                    window.MobileMenu.syncWithAuthHeader(userData || user);
+        // Fonction pour attendre que FirebaseManager soit disponible
+        function waitForFirebaseManager() {
+            return new Promise((resolve) => {
+                if (typeof window.FirebaseManager !== 'undefined') {
+                    console.log('✅ FirebaseManager détecté');
+                    resolve();
+                } else {
+                    console.log('⏳ En attente de FirebaseManager...');
+                    setTimeout(() => {
+                        waitForFirebaseManager().then(resolve);
+                    }, 100);
                 }
             });
-            
-            console.log('✅ Page d\'accueil initialisée avec Firebase Manager');
-            
-            // RÉVÉLER LA PAGE une fois tout prêt
-            setTimeout(() => {
-                document.body.style.visibility = 'visible';
-            }, 800);
+        }
+
+        // Initialisation sécurisée
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                // Attendre que FirebaseManager soit disponible
+                await waitForFirebaseManager();
+                
+                // Maintenant on peut l'utiliser en sécurité
+                window.FirebaseManager.onAuthStateChanged((user, userData) => {
+                    // Mettre à jour header auth
+                    if (typeof window.AuthHeader !== 'undefined') {
+                        window.AuthHeader.updateAuthState(user, userData);
+                    }
+                    
+                    // Synchroniser avec menu mobile
+                    if (typeof window.MobileMenu !== 'undefined') {
+                        window.MobileMenu.syncWithAuthHeader(userData || user);
+                    }
+                });
+                
+                console.log('✅ Page d\'accueil initialisée avec Firebase Manager');
+                
+            } catch (error) {
+                console.error('❌ Erreur initialisation:', error);
+            } finally {
+                // RÉVÉLER LA PAGE une fois tout prêt (même en cas d'erreur)
+                setTimeout(() => {
+                    document.body.style.visibility = 'visible';
+                    console.log('👁️ Page révélée');
+                }, 800);
+            }
         });
     </script>
     
